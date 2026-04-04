@@ -1,0 +1,147 @@
+.logo-fire-text {
+    position: relative;
+    display: inline-block;
+    font-weight: 900;
+    font-size: 2.3rem;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: transparent;
+
+    background:
+            linear-gradient(
+                    180deg,
+                    #fffdf5 0%,
+                    #fff2b8 12%,
+                    #ffd36b 24%,
+                    #ffb347 38%,
+                    #ff7a1f 52%,
+                    #ff4d00 68%,
+                    #c81d00 84%,
+                    #5a0900 100%
+            );
+    background-size: 100% 220%;
+    background-position: 50% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+
+    filter: drop-shadow(0 0 6px rgba(255, 120, 20, 0.18));
+    animation: flameBase 5.5s ease-in-out infinite;
+}
+
+.logo-fire-text::before,
+.logo-fire-text::after {
+    content: "Richstok";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+.logo-fire-text::before {
+    background:
+            radial-gradient(circle at 50% 85%, rgba(255,255,210,0.95) 0%, rgba(255,230,140,0.9) 18%, rgba(255,150,40,0.65) 38%, rgba(255,80,0,0.18) 62%, transparent 76%),
+            linear-gradient(
+                    180deg,
+                    #fffef8 0%,
+                    #fff4c4 14%,
+                    #ffd978 28%,
+                    #ffad33 42%,
+                    #ff6a00 62%,
+                    #d92d00 82%,
+                    #681000 100%
+            );
+    background-size: 140% 180%, 100% 240%;
+    background-position: 50% 100%, 50% 100%;
+    filter: blur(0.4px) saturate(1.08);
+    opacity: 0.95;
+    animation: flameLayer1 6.5s ease-in-out infinite;
+}
+
+.logo-fire-text::after {
+    background:
+            radial-gradient(circle at 50% 92%, rgba(255,245,200,0.9) 0%, rgba(255,180,60,0.7) 20%, rgba(255,90,0,0.26) 42%, transparent 65%),
+            linear-gradient(
+                    180deg,
+                    rgba(255,255,255,0.9) 0%,
+                    rgba(255,231,153,0.95) 14%,
+                    rgba(255,170,51,0.88) 32%,
+                    rgba(255,93,0,0.82) 58%,
+                    rgba(179,23,0,0.9) 84%,
+                    rgba(80,8,0,0.95) 100%
+            );
+    background-size: 160% 200%, 100% 260%;
+    background-position: 48% 100%, 50% 100%;
+    mix-blend-mode: screen;
+    opacity: 0.72;
+    filter: blur(1.2px);
+    animation: flameLayer2 8s ease-in-out infinite;
+}
+
+@keyframes flameBase {
+    0% {
+        background-position: 50% 100%;
+        filter: drop-shadow(0 0 6px rgba(255, 120, 20, 0.18));
+    }
+    50% {
+        background-position: 50% 82%;
+        filter: drop-shadow(0 0 10px rgba(255, 110, 20, 0.28));
+    }
+    100% {
+        background-position: 50% 100%;
+        filter: drop-shadow(0 0 6px rgba(255, 120, 20, 0.18));
+    }
+}
+
+@keyframes flameLayer1 {
+    0% {
+        background-position: 48% 100%, 50% 100%;
+        transform: translateY(0) scaleY(1);
+        opacity: 0.92;
+    }
+    25% {
+        background-position: 52% 90%, 50% 86%;
+        transform: translateY(-0.5px) scaleY(1.01);
+        opacity: 0.98;
+    }
+    50% {
+        background-position: 49% 78%, 50% 72%;
+        transform: translateY(-1px) scaleY(1.03);
+        opacity: 1;
+    }
+    75% {
+        background-position: 53% 88%, 50% 84%;
+        transform: translateY(-0.4px) scaleY(1.015);
+        opacity: 0.96;
+    }
+    100% {
+        background-position: 48% 100%, 50% 100%;
+        transform: translateY(0) scaleY(1);
+        opacity: 0.92;
+    }
+}
+
+@keyframes flameLayer2 {
+    0% {
+        background-position: 46% 100%, 50% 100%;
+        transform: translateY(0) scale(1);
+        opacity: 0.66;
+    }
+    30% {
+        background-position: 51% 88%, 50% 82%;
+        transform: translateY(-0.6px) scale(1.01);
+        opacity: 0.74;
+    }
+    60% {
+        background-position: 47% 74%, 50% 68%;
+        transform: translateY(-1.2px) scale(1.02);
+        opacity: 0.8;
+    }
+    100% {
+        background-position: 46% 100%, 50% 100%;
+        transform: translateY(0) scale(1);
+        opacity: 0.66;
+    }
+}

@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/richstok}
+    username: ${DB_USERNAME:richstok}
+    password: ${DB_PASSWORD:richstok}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+
+app:
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+  security:
+    jwt-secret: ${JWT_SECRET:UmljaHN0b2stU3BhcmstU2VjdXJlLUpXVC1LZXktMjAyNg==}
+    jwt-expiration-seconds: ${JWT_EXPIRATION_SECONDS:259200}
+    cookie-name: ${AUTH_COOKIE_NAME:RICHSTOK_AUTH}
+    cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    cookie-same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+    cookie-max-age-seconds: ${AUTH_COOKIE_MAX_AGE_SECONDS:259200}
+    bootstrap:
+      admin:
+        email: ${BOOTSTRAP_ADMIN_EMAIL:admin@richstok.local}
+        password: ${BOOTSTRAP_ADMIN_PASSWORD:Admin123!}
+        fullName: ${BOOTSTRAP_ADMIN_FULL_NAME:Richstok Admin}
+      user:
+        email: ${BOOTSTRAP_USER_EMAIL:user@richstok.local}
+        password: ${BOOTSTRAP_USER_PASSWORD:User123!}
+        fullName: ${BOOTSTRAP_USER_FULL_NAME:Richstok User}
