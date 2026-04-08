@@ -21,6 +21,15 @@ public class Product {
     @Column(nullable = false, unique = true, length = 220)
     private String slug;
 
+    @Column(nullable = false, unique = true, length = 120)
+    private String sku;
+
+    @Column(nullable = false, length = 120)
+    private String category;
+
+    @Column(length = 140)
+    private String oemNumber;
+
     @Column(length = 2000)
     private String description;
 
@@ -29,6 +38,10 @@ public class Product {
 
     @Column(nullable = false)
     private Integer stockQuantity;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private StockState stockState;
 
     @Column(length = 120)
     private String brand;
@@ -41,6 +54,13 @@ public class Product {
 
     @Column(nullable = false)
     private OffsetDateTime updatedAt;
+
+    @Column(nullable = false)
+    private String model;
+
+    @Column(columnDefinition = "text")
+    private String imageUrl;
+
 
     @PrePersist
     void onCreate() {

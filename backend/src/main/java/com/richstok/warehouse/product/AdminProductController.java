@@ -1,11 +1,13 @@
 package com.richstok.warehouse.product;
 
+import com.richstok.warehouse.product.dto.ProductBulkImportResponse;
 import com.richstok.warehouse.product.dto.ProductRequest;
 import com.richstok.warehouse.product.dto.ProductResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +27,11 @@ public class AdminProductController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(@Valid @RequestBody ProductRequest request) {
         return productService.createProduct(request);
+    }
+
+    @PostMapping("/import-excel")
+    public ProductBulkImportResponse importExcel(@RequestParam("file") MultipartFile file) {
+        return productService.importProductsFromExcel(file);
     }
 
     @PutMapping("/{id}")

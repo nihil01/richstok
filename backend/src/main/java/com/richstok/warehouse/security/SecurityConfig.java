@@ -39,17 +39,40 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(Customizer.withDefaults())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/catalog/**").permitAll()
-                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/logout").permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .csrf(AbstractHttpConfigurer::disable)
+            .cors(Customizer.withDefaults())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    .requestMatchers(
+                        "/",
+                        "/index.html",
+                        "/favicon.ico",
+                        "/assets/**",
+                        "/brands/**",
+                        "/admin",
+                        "/admin/**",
+                        "/account",
+                        "/account/**",
+                        "/products/**",
+                        "/**/*.js",
+                        "/**/*.css",
+                        "/**/*.png",
+                        "/**/*.jpg",
+                        "/**/*.jpeg",
+                        "/**/*.svg",
+                        "/**/*.webp",
+                        "/**/*.ico",
+                        "/**/*.map"
+                    ).permitAll()
+                    .requestMatchers("/api/v1/catalog/**").permitAll()
+                    .requestMatchers("/api/v1/brands_images").permitAll()
+                    .requestMatchers("/api/v1/currency_rate").permitAll()
+                    .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/logout").permitAll()
+                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                    .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -77,4 +100,6 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/api/**", config);
         return source;
     }
+
+
 }

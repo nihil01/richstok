@@ -17,16 +17,32 @@ public class AuthBootstrapInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        AppProperties.Bootstrap bootstrap = properties.bootstrap();
+        if (bootstrap == null) {
+            ensureUser("admin@richstok.local", "Richstok Admin", "Admin123!", UserRole.ADMIN);
+            ensureUser("user@richstok.local", "Richstok User", "User123!", UserRole.USER);
+            return;
+        }
 
-        var adminEntity = properties.bootstrap().admin();
-        var userEntity = properties.bootstrap().admin();
+        AppProperties.Bootstrap.Entity adminEntity = bootstrap.admin();
+        AppProperties.Bootstrap.Entity userEntity = bootstrap.user();
 
-        ensureUser(adminEntity.email(), adminEntity.fullName(), adminEntity.password(), UserRole.ADMIN);
-        ensureUser(userEntity.email(), userEntity.fullName(), userEntity.password(), UserRole.USER);
+        if (adminEntity != null) {
+            ensureUser(adminEntity.email(), adminEntity.fullName(), adminEntity.password(), UserRole.ADMIN);
+        }
+        if (userEntity != null) {
+            ensureUser(userEntity.email(), userEntity.fullName(), userEntity.password(), UserRole.USER);
+        }
     }
 
     private void ensureUser(String email, String fullName, String password, UserRole role) {
+        if (email == null || fullName == null || password == null) {
+            return;
+        }
         String normalizedEmail = email.trim().toLowerCase();
+        if (normalizedEmail.isBlank()) {
+            return;
+        }
         if (appUserRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             return;
         }

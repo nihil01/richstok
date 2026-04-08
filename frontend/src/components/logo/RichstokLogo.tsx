@@ -62,12 +62,10 @@ export default function RichstokLogo() {
             <div className="relative">
         <span
             className="
+            logo-wordmark
             relative z-10
             text-[24px] md:text-[26px]
             font-extrabold uppercase tracking-[0.18em]
-            text-transparent bg-clip-text
-            bg-[linear-gradient(180deg,#ffffff_0%,#f4f4f5_35%,#d4d4d8_65%,#ffffff_100%)]
-            [text-shadow:0_0_10px_rgba(255,255,255,0.04)]
           "
                 >
           Richstok
@@ -77,7 +75,7 @@ export default function RichstokLogo() {
                     className="
             pointer-events-none absolute left-0 right-0 bottom-[2px] h-[3px]
             rounded-full
-            bg-gradient-to-r from-transparent via-orange-500 to-transparent
+            bg-gradient-to-r from-transparent via-red-500 to-transparent
             opacity-90 blur-[0.5px]
             animate-logo-sweep
           "

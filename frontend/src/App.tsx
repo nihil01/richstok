@@ -1,20 +1,22 @@
-import {fetchCurrentUser, logout} from "@/api/client";
+import {fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
+import AutoBackdrop from "@/components/AutoBackdrop";
 import AuthModal from "@/components/AuthModal";
-import NeonBackdrop from "@/components/NeonBackdrop";
+import HeaderCurrencyTicker from "@/components/HeaderCurrencyTicker";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
 import AccountPage from "@/pages/AccountPage";
 import AdminPage from "@/pages/AdminPage";
+import ProductDetailsPage from "@/pages/ProductDetailsPage";
 import StorePage from "@/pages/StorePage";
 import type {AuthUser} from "@/types/auth";
+import type {DisplayCurrency} from "@/types/currency";
 import type {Language, ThemeMode} from "@/types/ui";
+import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDisplayCurrency} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {LayoutDashboard, LogIn, LogOut, Moon, ShoppingBag, Sun, User} from "lucide-react";
+import {Coins, LayoutDashboard, LogIn, LogOut, Moon, ShoppingBag, Sun, User} from "lucide-react";
 import type {ReactNode} from "react";
 import {useEffect, useRef, useState} from "react";
 import {Link, Route, Routes, useLocation, useNavigate} from "react-router-dom";
-
-type AuthMode = "login" | "register";
 
 const labels: Record<
   Language,
@@ -23,9 +25,9 @@ const labels: Record<
     account: string;
     admin: string;
     language: string;
-    signIn: string;
-    signUp: string;
+    authButton: string;
     signOut: string;
+    currency: string;
     themeDark: string;
     themeLight: string;
     catalog: string;
@@ -43,9 +45,9 @@ const labels: Record<
     account: "Kabinet",
     admin: "Admin",
     language: "Dil",
-    signIn: "Giriş",
-    signUp: "Qeydiyyat",
+    authButton: "Giriş / Qeydiyyat",
     signOut: "Çıxış",
+    currency: "Valyuta",
     themeDark: "Qaranlıq",
     themeLight: "Açıq",
     catalog: "Kataloq",
@@ -62,9 +64,9 @@ const labels: Record<
     account: "Account",
     admin: "Admin",
     language: "Language",
-    signIn: "Sign in",
-    signUp: "Register",
+    authButton: "Login / Register",
     signOut: "Sign out",
+    currency: "Currency",
     themeDark: "Dark",
     themeLight: "Light",
     catalog: "Catalog",
@@ -81,9 +83,9 @@ const labels: Record<
     account: "Кабинет",
     admin: "Админ",
     language: "Язык",
-    signIn: "Вход",
-    signUp: "Регистрация",
+    authButton: "Вход / Регистрация",
     signOut: "Выход",
+    currency: "Валюта",
     themeDark: "Темная",
     themeLight: "Светлая",
     catalog: "Каталог",
@@ -97,22 +99,28 @@ const labels: Record<
   }
 };
 
+function getInitialTheme(): ThemeMode {
+  const savedTheme = localStorage.getItem("richstok-theme") as ThemeMode | null;
+  if (savedTheme === "dark" || savedTheme === "light") {
+    return savedTheme;
+  }
+  const currentHour = new Date().getHours();
+  return currentHour >= 20 || currentHour < 7 ? "dark" : "light";
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isBooting, setIsBooting] = useState(true);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("richstok-language") as Language) || "az");
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const savedTheme = localStorage.getItem("richstok-theme") as ThemeMode | null;
-    if (savedTheme === "dark" || savedTheme === "light") {
-      return savedTheme;
-    }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialTheme());
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() => resolveDisplayCurrency(localStorage.getItem("richstok-display-currency")));
+  const [currencyBaseCode, setCurrencyBaseCode] = useState("AZN");
+  const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(() => ({...DEFAULT_DISPLAY_RATES}));
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [authModal, setAuthModal] = useState<{open: boolean; mode: AuthMode}>({open: false, mode: "login"});
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const lastScrollRef = useRef(0);
   const pendingSectionRef = useRef<string | null>(null);
   const ui = labels[language];
@@ -133,6 +141,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("richstok-language", language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem("richstok-display-currency", displayCurrency);
+  }, [displayCurrency]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -164,6 +176,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void (async () => {
+      try {
+        const data = await fetchCurrencyRate();
+        setCurrencyBaseCode(data.baseCode || "AZN");
+        setCurrencyRates({
+          ...DEFAULT_DISPLAY_RATES,
+          ...data.conversionRates,
+          AZN: 1
+        });
+      } catch {
+        setCurrencyBaseCode("AZN");
+        setCurrencyRates({...DEFAULT_DISPLAY_RATES});
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     if (location.pathname !== "/") {
       return;
     }
@@ -178,8 +207,8 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [location.pathname]);
 
-  function openAuth(mode: AuthMode) {
-    setAuthModal({open: true, mode});
+  function openAuth() {
+    setAuthModalOpen(true);
   }
 
   async function handleLogout() {
@@ -202,15 +231,16 @@ export default function App() {
   return (
     <div className="app-shell relative min-h-screen bg-transparent">
       <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
-      <NeonBackdrop />
+      <AutoBackdrop />
 
       <motion.header
         initial={{y: 0}}
-        animate={{y: isHeaderHidden ? -126 : 0}}
+        animate={{y: isHeaderHidden ? "-100%" : 0}}
         transition={{duration: 0.25, ease: "easeOut"}}
         className="header-surface sticky top-0 z-30 border-b backdrop-blur-xl"
       >
-        <div className="mx-auto flex w-full max-w-[1240px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <HeaderCurrencyTicker language={language} baseCode={currencyBaseCode} rates={currencyRates} />
+        <div className="mx-auto flex w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <motion.div
             initial={{opacity: 0, y: -10, scale: 0.98}}
             animate={{opacity: 1, y: 0, scale: 1}}
@@ -269,15 +299,81 @@ export default function App() {
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setThemeMode((prev) => (prev === "dark" ? "light" : "dark"))}
-              className="glass-card theme-text inline-flex items-center gap-2 rounded-xl border border-brand-500/20 px-3 py-2 text-xs font-medium"
-              aria-label={themeMode === "dark" ? ui.themeLight : ui.themeDark}
-            >
-              {themeMode === "dark" ? <Sun className="h-4 w-4 text-brand-200" /> : <Moon className="h-4 w-4 text-brand-700" />}
-              <span className="hidden sm:inline">{themeMode === "dark" ? ui.themeLight : ui.themeDark}</span>
-            </button>
+            <div className="glass-card flex items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1">
+              <Coins className="h-4 w-4 text-brand-200" />
+              <label className="sr-only" htmlFor="display-currency-select">
+                {ui.currency}
+              </label>
+              <select
+                id="display-currency-select"
+                value={displayCurrency}
+                onChange={(event) => setDisplayCurrency(resolveDisplayCurrency(event.target.value))}
+                className="bg-transparent text-xs font-medium theme-text outline-none"
+                aria-label={ui.currency}
+              >
+                {DISPLAY_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code} {getCurrencySymbol(code)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="glass-card flex items-center rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur-md">
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={themeMode === "dark"}
+                    onClick={() => setThemeMode((prev) => (prev === "dark" ? "light" : "dark"))}
+                    aria-label={themeMode === "dark" ? ui.themeLight : ui.themeDark}
+                    className={`relative flex h-9 w-[72px] items-center rounded-full border transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-brand-400/50 ${
+                        themeMode === "dark"
+                            ? "border-brand-400/30 bg-gradient-to-r from-slate-900 via-brand-900/80 to-brand-700 shadow-inner shadow-brand-950/40"
+                            : "border-slate-300/70 bg-gradient-to-r from-slate-100 to-slate-200 shadow-inner"
+                    }`}
+                >
+                <span
+                    className={`absolute inset-y-0 left-0 flex items-center px-2 transition-opacity duration-300 ${
+                        themeMode === "dark" ? "opacity-100" : "opacity-60"
+                    }`}
+                >
+                  <Moon
+                      className={`h-4 w-4 transition-colors duration-300 ${
+                          themeMode === "dark" ? "text-white" : "text-slate-500"
+                      }`}
+                  />
+                </span>
+
+                            <span
+                                className={`absolute inset-y-0 right-0 flex items-center px-2 transition-opacity duration-300 ${
+                                    themeMode === "light" ? "opacity-100" : "opacity-60"
+                                }`}
+                            >
+                  <Sun
+                      className={`h-4 w-4 transition-colors duration-300 ${
+                          themeMode === "light" ? "text-amber-500" : "text-white/60"
+                      }`}
+                  />
+                </span>
+
+                            <span
+                                className={`absolute top-1/2 h-7 w-7 -translate-y-1/2 rounded-full border shadow-lg transition-all duration-300 ease-out ${
+                                    themeMode === "dark"
+                                        ? "translate-x-1 border-white/10 bg-white"
+                                        : "translate-x-[38px] border-white/80 bg-white"
+                                }`}
+                            >
+                  <span className="flex h-full w-full items-center justify-center">
+                    {themeMode === "dark" ? (
+                        <Moon className="h-3.5 w-3.5 text-slate-700" />
+                    ) : (
+                        <Sun className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                  </span>
+                </span>
+                  </button>
+
+            </div>
 
             {!authChecked ? null : authUser ? (
               <div className="glass-card flex items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1.5">
@@ -291,24 +387,24 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => openAuth("login")} className="glass-card theme-text inline-flex items-center gap-1 rounded-xl border border-brand-500/20 px-3 py-2 text-xs font-medium transition hover:bg-brand-500/12">
-                  <LogIn className="h-3.5 w-3.5 text-brand-300" />
-                  {ui.signIn}
-                </button>
-                <button type="button" onClick={() => openAuth("register")} className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 px-3 py-2 text-xs font-medium text-white transition hover:opacity-90">
-                  {ui.signUp}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openAuth}
+                aria-label={ui.authButton}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
+              >
+                <LogIn className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>
       </motion.header>
 
-      <main className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+      <main className="mx-auto w-full max-w-[1360px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<StorePage language={language} />} />
+            <Route path="/" element={<StorePage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />} />
+            <Route path="/products/:id" element={<ProductDetailsPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />} />
             <Route
               path="/account"
               element={
@@ -323,7 +419,7 @@ export default function App() {
               path="/admin"
               element={
                 authUser && isAdmin ? (
-                  <AdminPage language={language} />
+                  <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
                 ) : (
                   <GuardCard title={ui.adminOnlyTitle} description={ui.adminOnlyBody} buttonText={ui.toStore} />
                 )
@@ -333,7 +429,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <AuthModal language={language} open={authModal.open} mode={authModal.mode} onClose={() => setAuthModal((prev) => ({...prev, open: false}))} onAuthenticated={setAuthUser} />
+      <AuthModal language={language} open={authModalOpen} onClose={() => setAuthModalOpen(false)} onAuthenticated={setAuthUser} />
     </div>
   );
 }
@@ -345,18 +441,25 @@ type NavLinkProps = {
 };
 
 function NavLink({to, active, children}: NavLinkProps) {
-  return (
-    <Link to={to} className={`relative rounded-lg px-4 py-2 text-sm font-medium transition-colors ${active ? "text-white" : "theme-text"}`}>
-      {active && (
-        <motion.span
-          layoutId="activeNav"
-          className="absolute inset-0 rounded-lg bg-gradient-to-r from-brand-600/92 via-brand-500/92 to-pulse-500/92"
-          transition={{type: "spring", stiffness: 380, damping: 30}}
-        />
-      )}
-      <span className="relative z-10 flex items-center gap-2">{children}</span>
-    </Link>
-  );
+    return (
+        <Link
+            to={to}
+            className={`relative rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                active ? "text-white" : "theme-text"
+            }`}
+        >
+            {active && (
+                <motion.span
+                    layoutId="activeNav"
+                    className="absolute inset-0 rounded-lg bg-red-500"
+                    transition={{type: "spring", stiffness: 380, damping: 30}}
+                />
+            )}
+            <span className="relative z-10 flex items-center gap-2">
+        {children}
+      </span>
+        </Link>
+    );
 }
 
 type GuardCardProps = {

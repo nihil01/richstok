@@ -1,0 +1,1 @@
+ALTER TABLE products ADD column model text not null;

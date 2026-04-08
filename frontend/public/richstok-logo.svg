@@ -1,0 +1,22 @@
+<svg width="520" height="124" viewBox="0 0 520 124" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="520" height="124" rx="18" fill="#0E0C11"/>
+  <rect x="96" y="72" width="402" height="26" rx="13" fill="#FF5A1F"/>
+  <g opacity="0.92">
+    <path d="M102 66C146 58 195 59 235 66C278 74 324 75 370 68C397 64 426 62 456 64V76H102V66Z" fill="#FF6A1A"/>
+    <path d="M113 67C122 54 132 53 139 58C146 63 154 62 160 56C168 48 180 49 187 58C194 67 203 68 211 61C220 54 231 55 238 64C244 72 254 73 263 66C271 59 283 59 291 68H113V67Z" fill="#FF4D2D"/>
+  </g>
+  <g transform="translate(18,10)">
+    <circle cx="42" cy="42" r="30" stroke="#FF5A1F" stroke-width="8"/>
+    <g>
+      <animateTransform attributeName="transform" type="rotate" from="0 42 42" to="360 42 42" dur="2s" repeatCount="1" fill="freeze"/>
+      <circle cx="42" cy="42" r="16" stroke="#FF5A1F" stroke-width="7"/>
+      <circle cx="42" cy="42" r="4.5" fill="#FF5A1F"/>
+      <path d="M8 23C14 10 28 1 42 1" stroke="#FF5A1F" stroke-width="7" stroke-linecap="round"/>
+      <path d="M6 42C6 56 12 68 22 76" stroke="#FF5A1F" stroke-width="7" stroke-linecap="round"/>
+      <path d="M42 83C55 83 67 77 75 67" stroke="#FF5A1F" stroke-width="7" stroke-linecap="round"/>
+    </g>
+  </g>
+  <text x="112" y="104" fill="#FFD3BE" font-family="Eurostile, Orbitron, 'Segoe UI', sans-serif" font-size="58" letter-spacing="2.5">
+    RICHSTOK
+  </text>
+</svg>
