@@ -36,6 +36,12 @@ public class GlobalExceptionHandler {
                 .body(new ApiError(ex.getMessage(), OffsetDateTime.now(), Map.of()));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError(ex.getMessage(), OffsetDateTime.now(), Map.of()));
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiError> handleUnauthorized(BadCredentialsException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -46,6 +46,21 @@ public class Product {
     @Column(length = 120)
     private String brand;
 
+    @Column(name = "baku_count", nullable = false)
+    private Integer bakuCount;
+
+    @Column(name = "baku_count_unknown", nullable = false)
+    private boolean bakuCountUnknown;
+
+    @Column(name = "ganja_count", nullable = false)
+    private Integer ganjaCount;
+
+    @Column(name = "ganja_count_unknown", nullable = false)
+    private boolean ganjaCountUnknown;
+
+    @Column(name = "delivery_days")
+    private Integer deliveryDays;
+
     @Column(nullable = false)
     private boolean active;
 

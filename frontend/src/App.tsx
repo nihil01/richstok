@@ -1,21 +1,27 @@
 import {fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
-import AutoBackdrop from "@/components/AutoBackdrop";
 import AuthModal from "@/components/AuthModal";
 import HeaderCurrencyTicker from "@/components/HeaderCurrencyTicker";
+import SiteFooter from "@/components/SiteFooter";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
+import {CartProvider, useCart} from "@/context/CartContext";
+import {WishlistProvider, useWishlist} from "@/context/WishlistContext";
 import AccountPage from "@/pages/AccountPage";
 import AdminPage from "@/pages/AdminPage";
+import CartPage from "@/pages/CartPage";
 import ProductDetailsPage from "@/pages/ProductDetailsPage";
 import StorePage from "@/pages/StorePage";
+import WishlistPage from "@/pages/WishlistPage";
 import type {AuthUser} from "@/types/auth";
 import type {DisplayCurrency} from "@/types/currency";
+import type {Product} from "@/types/product";
 import type {Language, ThemeMode} from "@/types/ui";
 import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDisplayCurrency} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {Coins, LayoutDashboard, LogIn, LogOut, Moon, ShoppingBag, Sun, User} from "lucide-react";
+import {CheckCircle2, Coins, Heart, LayoutDashboard, LogIn, LogOut, Moon, Settings2, ShoppingBag, ShoppingCart, Sparkles, Sun, User} from "lucide-react";
 import type {ReactNode} from "react";
 import {useEffect, useRef, useState} from "react";
+import type {Location} from "react-router-dom";
 import {Link, Route, Routes, useLocation, useNavigate} from "react-router-dom";
 
 const labels: Record<
@@ -24,6 +30,8 @@ const labels: Record<
     store: string;
     account: string;
     admin: string;
+    cart: string;
+    wishlist: string;
     language: string;
     authButton: string;
     signOut: string;
@@ -38,14 +46,17 @@ const labels: Record<
     authOnlyTitle: string;
     authOnlyBody: string;
     toStore: string;
+    addedToCart: string;
   }
 > = {
   az: {
     store: "Mağaza",
     account: "Kabinet",
     admin: "Admin",
+    cart: "Səbət",
+    wishlist: "İstək",
     language: "Dil",
-    authButton: "Giriş / Qeydiyyat",
+    authButton: "Giriş",
     signOut: "Çıxış",
     currency: "Valyuta",
     themeDark: "Qaranlıq",
@@ -57,14 +68,17 @@ const labels: Record<
     adminOnlyBody: "Bu bölmə yalnız ADMIN hüququ olan istifadəçilər üçündür.",
     authOnlyTitle: "Giriş tələb olunur",
     authOnlyBody: "Bu bölməni açmaq üçün hesabına daxil ol.",
-    toStore: "Mağazaya qayıt"
+    toStore: "Mağazaya qayıt",
+    addedToCart: "Məhsul səbətə əlavə olundu"
   },
   en: {
     store: "Store",
     account: "Account",
     admin: "Admin",
+    cart: "Cart",
+    wishlist: "Wishlist",
     language: "Language",
-    authButton: "Login / Register",
+    authButton: "Login",
     signOut: "Sign out",
     currency: "Currency",
     themeDark: "Dark",
@@ -76,14 +90,17 @@ const labels: Record<
     adminOnlyBody: "This section is available only for ADMIN role users.",
     authOnlyTitle: "Authentication required",
     authOnlyBody: "Please sign in to open this section.",
-    toStore: "Back to store"
+    toStore: "Back to store",
+    addedToCart: "Product added to cart"
   },
   ru: {
     store: "Магазин",
     account: "Кабинет",
     admin: "Админ",
+    cart: "Корзина",
+    wishlist: "Желаемое",
     language: "Язык",
-    authButton: "Вход / Регистрация",
+    authButton: "Вход",
     signOut: "Выход",
     currency: "Валюта",
     themeDark: "Темная",
@@ -95,7 +112,8 @@ const labels: Record<
     adminOnlyBody: "Раздел доступен только для пользователей с ролью ADMIN.",
     authOnlyTitle: "Нужен вход в аккаунт",
     authOnlyBody: "Войди в аккаунт, чтобы открыть этот раздел.",
-    toStore: "Вернуться в магазин"
+    toStore: "Вернуться в магазин",
+    addedToCart: "Товар добавлен в корзину"
   }
 };
 
@@ -121,8 +139,13 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [cartToast, setCartToast] = useState<{id: number; text: string} | null>(null);
+  const [cartPulseId, setCartPulseId] = useState(0);
   const lastScrollRef = useRef(0);
+  const toastIdRef = useRef(0);
   const pendingSectionRef = useRef<string | null>(null);
+  const preferencesRef = useRef<HTMLDivElement | null>(null);
   const ui = labels[language];
   const isAdmin = authUser?.role === "ADMIN";
 
@@ -207,6 +230,43 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const handleOutside = (event: MouseEvent | TouchEvent) => {
+      if (!preferencesRef.current) {
+        return;
+      }
+      if (event.target instanceof Node && preferencesRef.current.contains(event.target)) {
+        return;
+      }
+      setPreferencesOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreferencesOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside, {passive: true});
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cartToast) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setCartToast(null);
+    }, 1700);
+    return () => window.clearTimeout(timer);
+  }, [cartToast]);
+
   function openAuth() {
     setAuthModalOpen(true);
   }
@@ -228,16 +288,23 @@ export default function App() {
     document.getElementById(sectionId)?.scrollIntoView({behavior: "smooth", block: "start"});
   }
 
+  function notifyAddedToCart() {
+    toastIdRef.current += 1;
+    setCartToast({id: toastIdRef.current, text: ui.addedToCart});
+    setCartPulseId((previous) => previous + 1);
+  }
+
   return (
-    <div className="app-shell relative min-h-screen bg-transparent">
+    <WishlistProvider authUser={authUser}>
+      <CartProvider authUser={authUser}>
+      <div className="app-shell relative min-h-screen bg-transparent">
       <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
-      <AutoBackdrop />
 
       <motion.header
         initial={{y: 0}}
         animate={{y: isHeaderHidden ? "-100%" : 0}}
         transition={{duration: 0.25, ease: "easeOut"}}
-        className="header-surface sticky top-0 z-30 border-b backdrop-blur-xl"
+        className="header-surface sticky top-0 z-[90] border-b backdrop-blur-xl"
       >
         <HeaderCurrencyTicker language={language} baseCode={currencyBaseCode} rates={currencyRates} />
         <div className="mx-auto flex w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -265,6 +332,24 @@ export default function App() {
                 </NavLink>
               )}
 
+              <NavLink to="/cart" active={location.pathname.startsWith("/cart")}>
+                <motion.span
+                  key={cartPulseId}
+                  initial={{scale: 1, rotate: 0}}
+                  animate={{scale: [1, 1.22, 1], rotate: [0, -8, 8, 0]}}
+                  transition={{duration: 0.55, ease: "easeInOut"}}
+                  className="inline-flex"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </motion.span>
+                {ui.cart}
+              </NavLink>
+
+              <NavLink to="/wishlist" active={location.pathname.startsWith("/wishlist")}>
+                <Heart className="h-4 w-4" />
+                {ui.wishlist}
+              </NavLink>
+
               {isAdmin && (
                 <NavLink to="/admin" active={location.pathname.startsWith("/admin")}>
                   <LayoutDashboard className="h-4 w-4" />
@@ -272,33 +357,6 @@ export default function App() {
                 </NavLink>
               )}
             </nav>
-
-            <div className="glass-card hidden items-center gap-1 rounded-xl border border-brand-500/20 p-1 lg:flex">
-              <button type="button" onClick={() => goStoreSection("catalog")} className="theme-text rounded-md px-2 py-1 text-xs transition hover:bg-brand-600/18">
-                {ui.catalog}
-              </button>
-              <button type="button" onClick={() => goStoreSection("categories")} className="theme-text rounded-md px-2 py-1 text-xs transition hover:bg-brand-600/18">
-                {ui.categories}
-              </button>
-              <button type="button" onClick={() => goStoreSection("brands")} className="theme-text rounded-md px-2 py-1 text-xs transition hover:bg-brand-600/18">
-                {ui.brands}
-              </button>
-            </div>
-
-            <div className="glass-card flex items-center gap-1 rounded-xl border border-brand-500/20 p-1">
-              {(["az", "en", "ru"] as Language[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setLanguage(item)}
-                  className={`rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide transition ${language === item ? "bg-brand-600 text-white" : "theme-text hover:bg-brand-600/20"}`}
-                  aria-label={`${ui.language}: ${item.toUpperCase()}`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-
             <div className="glass-card flex items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1">
               <Coins className="h-4 w-4 text-brand-200" />
               <label className="sr-only" htmlFor="display-currency-select">
@@ -319,60 +377,58 @@ export default function App() {
               </select>
             </div>
 
-            <div className="glass-card flex items-center rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur-md">
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={themeMode === "dark"}
-                    onClick={() => setThemeMode((prev) => (prev === "dark" ? "light" : "dark"))}
-                    aria-label={themeMode === "dark" ? ui.themeLight : ui.themeDark}
-                    className={`relative flex h-9 w-[72px] items-center rounded-full border transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-brand-400/50 ${
-                        themeMode === "dark"
-                            ? "border-brand-400/30 bg-gradient-to-r from-slate-900 via-brand-900/80 to-brand-700 shadow-inner shadow-brand-950/40"
-                            : "border-slate-300/70 bg-gradient-to-r from-slate-100 to-slate-200 shadow-inner"
-                    }`}
-                >
-                <span
-                    className={`absolute inset-y-0 left-0 flex items-center px-2 transition-opacity duration-300 ${
-                        themeMode === "dark" ? "opacity-100" : "opacity-60"
-                    }`}
-                >
-                  <Moon
-                      className={`h-4 w-4 transition-colors duration-300 ${
-                          themeMode === "dark" ? "text-white" : "text-slate-500"
-                      }`}
-                  />
-                </span>
+            <div ref={preferencesRef} className="relative z-[130]">
+              <button
+                type="button"
+                aria-label={`${ui.language} & ${ui.themeDark}/${ui.themeLight}`}
+                onClick={() => setPreferencesOpen((prev) => !prev)}
+                className="glass-card inline-flex h-9 w-9 items-center justify-center rounded-xl border border-brand-500/20 transition hover:border-brand-300"
+              >
+                <Settings2 className="h-4 w-4 theme-text" />
+              </button>
 
-                            <span
-                                className={`absolute inset-y-0 right-0 flex items-center px-2 transition-opacity duration-300 ${
-                                    themeMode === "light" ? "opacity-100" : "opacity-60"
-                                }`}
-                            >
-                  <Sun
-                      className={`h-4 w-4 transition-colors duration-300 ${
-                          themeMode === "light" ? "text-amber-500" : "text-white/60"
-                      }`}
-                  />
-                </span>
+              <AnimatePresence>
+                {preferencesOpen && (
+                  <motion.div
+                    initial={{opacity: 0, y: -8, scale: 0.98}}
+                    animate={{opacity: 1, y: 0, scale: 1}}
+                    exit={{opacity: 0, y: -6, scale: 0.98}}
+                    transition={{duration: 0.18}}
+                    className="glass-card absolute right-0 top-[calc(100%+8px)] z-[120] w-52 rounded-xl border border-brand-500/20 p-2"
+                  >
+                    <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.language}</p>
+                    <div className="mb-2 flex items-center gap-1 px-1">
+                      {(["az", "en", "ru"] as Language[]).map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            setLanguage(item);
+                            setPreferencesOpen(false);
+                          }}
+                          className={`rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide transition ${language === item ? "bg-brand-600 text-white" : "theme-text hover:bg-brand-600/20"}`}
+                          aria-label={`${ui.language}: ${item.toUpperCase()}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
 
-                            <span
-                                className={`absolute top-1/2 h-7 w-7 -translate-y-1/2 rounded-full border shadow-lg transition-all duration-300 ease-out ${
-                                    themeMode === "dark"
-                                        ? "translate-x-1 border-white/10 bg-white"
-                                        : "translate-x-[38px] border-white/80 bg-white"
-                                }`}
-                            >
-                  <span className="flex h-full w-full items-center justify-center">
-                    {themeMode === "dark" ? (
-                        <Moon className="h-3.5 w-3.5 text-slate-700" />
-                    ) : (
-                        <Sun className="h-3.5 w-3.5 text-amber-500" />
-                    )}
-                  </span>
-                </span>
-                  </button>
-
+                    <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.themeDark} / {ui.themeLight}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
+                        setPreferencesOpen(false);
+                      }}
+                      className="theme-text flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition hover:bg-brand-600/20"
+                    >
+                      <span>{themeMode === "dark" ? ui.themeDark : ui.themeLight}</span>
+                      {themeMode === "dark" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {!authChecked ? null : authUser ? (
@@ -401,36 +457,71 @@ export default function App() {
       </motion.header>
 
       <main className="mx-auto w-full max-w-[1360px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<StorePage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />} />
-            <Route path="/products/:id" element={<ProductDetailsPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />} />
-            <Route
-              path="/account"
-              element={
-                authUser ? (
-                  <AccountPage language={language} user={authUser} />
-                ) : (
-                  <GuardCard title={ui.authOnlyTitle} description={ui.authOnlyBody} buttonText={ui.toStore} />
-                )
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                authUser && isAdmin ? (
-                  <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
-                ) : (
-                  <GuardCard title={ui.adminOnlyTitle} description={ui.adminOnlyBody} buttonText={ui.toStore} />
-                )
-              }
-            />
-          </Routes>
-        </AnimatePresence>
+        <CartAwareRoutes
+          location={location}
+          locationKey={location.pathname}
+          language={language}
+          displayCurrency={displayCurrency}
+          currencyRates={currencyRates}
+          authUser={authUser}
+          isAdmin={isAdmin}
+          adminOnlyTitle={ui.adminOnlyTitle}
+          adminOnlyBody={ui.adminOnlyBody}
+          authOnlyTitle={ui.authOnlyTitle}
+          authOnlyBody={ui.authOnlyBody}
+          toStore={ui.toStore}
+          onCartAdded={notifyAddedToCart}
+          onRequireAuth={openAuth}
+        />
       </main>
 
+      <SiteFooter language={language} />
       <AuthModal language={language} open={authModalOpen} onClose={() => setAuthModalOpen(false)} onAuthenticated={setAuthUser} />
-    </div>
+      <AnimatePresence>
+        {cartToast && (
+          <motion.div
+            key={cartToast.id}
+            initial={{opacity: 0, y: 28, scale: 0.88, x: 20}}
+            animate={{opacity: 1, y: 0, scale: 1, x: 0}}
+            exit={{opacity: 0, y: 12, scale: 0.92, x: 24}}
+            transition={{type: "spring", stiffness: 300, damping: 24}}
+            className="fixed bottom-5 right-5 z-[120] w-[min(92vw,340px)] overflow-hidden rounded-xl border border-red-400/45 bg-gradient-to-r from-[#7f1d1d]/95 via-[#991b1b]/95 to-[#b91c1c]/95 px-4 py-3 text-sm text-white shadow-[0_0_30px_rgba(239,68,68,0.45)] backdrop-blur"
+          >
+            <motion.div
+              className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-red-300/30"
+              animate={{scale: [0.9, 1.12, 0.96], opacity: [0.2, 0.5, 0.25]}}
+              transition={{duration: 1.1, repeat: Infinity, ease: "easeInOut"}}
+            />
+            <div className="relative flex items-center gap-2">
+              <motion.span
+                initial={{scale: 0.8, rotate: -18}}
+                animate={{scale: [0.9, 1.1, 1], rotate: [0, 12, 0]}}
+                transition={{duration: 0.4, ease: "easeOut"}}
+                className="inline-flex rounded-full bg-white/20 p-1"
+              >
+                <CheckCircle2 className="h-4 w-4 text-red-100" />
+              </motion.span>
+              <span className="font-medium">{cartToast.text}</span>
+              <motion.span
+                animate={{scale: [0.95, 1.2, 0.95], opacity: [0.45, 1, 0.45]}}
+                transition={{duration: 0.9, repeat: Infinity, ease: "easeInOut"}}
+                className="ml-auto inline-flex"
+              >
+                <Sparkles className="h-4 w-4 text-red-100" />
+              </motion.span>
+            </div>
+            <motion.div
+              initial={{scaleX: 1}}
+              animate={{scaleX: 0}}
+              transition={{duration: 1.65, ease: "linear"}}
+              className="mt-2 h-1 origin-left rounded-full bg-white/50"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </div>
+      </CartProvider>
+    </WishlistProvider>
   );
 }
 
@@ -477,5 +568,140 @@ function GuardCard({title, description, buttonText}: GuardCardProps) {
         {buttonText}
       </Link>
     </section>
+  );
+}
+
+type CartAwareRoutesProps = {
+  location: Location;
+  locationKey: string;
+  language: Language;
+  displayCurrency: DisplayCurrency;
+  currencyRates: Record<string, number>;
+  authUser: AuthUser | null;
+  isAdmin: boolean;
+  adminOnlyTitle: string;
+  adminOnlyBody: string;
+  authOnlyTitle: string;
+  authOnlyBody: string;
+  toStore: string;
+  onCartAdded: () => void;
+  onRequireAuth: () => void;
+};
+
+function CartAwareRoutes({
+  location,
+  locationKey,
+  language,
+  displayCurrency,
+  currencyRates,
+  authUser,
+  isAdmin,
+  adminOnlyTitle,
+  adminOnlyBody,
+  authOnlyTitle,
+  authOnlyBody,
+  toStore,
+  onCartAdded,
+  onRequireAuth
+}: CartAwareRoutesProps) {
+  const {addToCart} = useCart();
+  const {isWishlisted, toggleWishlist} = useWishlist();
+
+  async function handleAddToCart(product: Product) {
+    if (!authUser) {
+      onRequireAuth();
+      return;
+    }
+    await addToCart(product);
+    onCartAdded();
+  }
+
+  function handleToggleWishlist(product: Product) {
+    if (!authUser) {
+      onRequireAuth();
+      return;
+    }
+    toggleWishlist(product);
+  }
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={locationKey}>
+        <Route
+          path="/"
+          element={
+            <StorePage
+              language={language}
+              displayCurrency={displayCurrency}
+              currencyRates={currencyRates}
+              onAddToCart={(product) => void handleAddToCart(product)}
+            />
+          }
+        />
+        <Route
+          path="/products/:id"
+          element={
+            <ProductDetailsPage
+              language={language}
+              displayCurrency={displayCurrency}
+              currencyRates={currencyRates}
+              onAddToCart={(product) => void handleAddToCart(product)}
+              isWishlisted={(productId) => Boolean(authUser) && isWishlisted(productId)}
+              onToggleWishlist={handleToggleWishlist}
+            />
+          }
+        />
+        <Route
+          path="/wishlist"
+          element={
+            authUser ? (
+              <WishlistPage
+                language={language}
+                displayCurrency={displayCurrency}
+                currencyRates={currencyRates}
+                onAddToCart={(product) => void handleAddToCart(product)}
+              />
+            ) : (
+              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+            )
+          }
+        />
+        <Route
+          path="/cart"
+          element={
+            authUser ? (
+              <CartPage
+                language={language}
+                displayCurrency={displayCurrency}
+                currencyRates={currencyRates}
+                authUser={authUser}
+              />
+            ) : (
+              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+            )
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            authUser ? (
+              <AccountPage language={language} user={authUser} />
+            ) : (
+              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+            )
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            authUser && isAdmin ? (
+              <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
+            ) : (
+              <GuardCard title={adminOnlyTitle} description={adminOnlyBody} buttonText={toStore} />
+            )
+          }
+        />
+      </Routes>
+    </AnimatePresence>
   );
 }

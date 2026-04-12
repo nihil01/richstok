@@ -1,5 +1,7 @@
 package com.richstok.warehouse.product;
 
+import com.richstok.warehouse.common.dto.PageResponse;
+import com.richstok.warehouse.product.dto.CatalogCategoryResponse;
 import  com.richstok.warehouse.product.dto.ProductResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,21 @@ public class CatalogController {
     @GetMapping
     public List<ProductResponse> getProducts() {
         return productService.getActiveProducts();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<ProductResponse> getProductsPage(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "12") int size,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "query", required = false) String query
+    ) {
+        return productService.getActiveProductsPage(page, size, category, query);
+    }
+
+    @GetMapping("/categories")
+    public List<CatalogCategoryResponse> getCategories() {
+        return productService.getCatalogCategories();
     }
 
     @GetMapping("/search")

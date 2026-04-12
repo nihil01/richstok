@@ -3,7 +3,7 @@ import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
-import {motion} from "framer-motion";
+import {AnimatePresence, motion} from "framer-motion";
 import {ArrowLeft, Clock3, Heart, ImageOff, PackageCheck, ShieldCheck, ShoppingCart, Tag, Truck} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {Link, useParams} from "react-router-dom";
@@ -12,6 +12,9 @@ type ProductDetailsPageProps = {
   language: Language;
   displayCurrency: DisplayCurrency;
   currencyRates: Record<string, number>;
+  onAddToCart?: (product: Product) => void;
+  isWishlisted?: (productId: number) => boolean;
+  onToggleWishlist?: (product: Product) => void;
 };
 
 const detailsCopy: Record<
@@ -26,12 +29,18 @@ const detailsCopy: Record<
     brand: string;
     model: string;
     oem: string;
+    baku: string;
+    ganja: string;
+    deliveryDays: string;
+    daysShort: string;
     stock: string;
     stockState: string;
     active: string;
     createdAt: string;
     updatedAt: string;
     addToCart: string;
+    outOfStockAction: string;
+    clarifyAction: string;
     favorite: string;
     favored: string;
     delivery: string;
@@ -40,6 +49,8 @@ const detailsCopy: Record<
     inStock: string;
     lowStock: string;
     outOfStock: string;
+    unknownCount: string;
+    stockUnknownHint: string;
     yes: string;
     no: string;
   }
@@ -49,17 +60,23 @@ const detailsCopy: Record<
     loading: "Məhsul yüklənir...",
     notFound: "Məhsul tapılmadı və ya silinib.",
     retry: "Yenidən yoxla",
-    sku: "SKU",
+    sku: "Brand code",
     category: "Kateqoriya",
     brand: "Brend",
     model: "Model",
     oem: "OEM nömrəsi",
+    baku: "Bakı",
+    ganja: "Gəncə",
+    deliveryDays: "Çatdırılma",
+    daysShort: "gün",
     stock: "Qalıq",
     stockState: "Stok statusu",
     active: "Aktivlik",
     createdAt: "Yaradılıb",
     updatedAt: "Yenilənib",
     addToCart: "Səbətə at",
+    outOfStockAction: "Yoxdur",
+    clarifyAction: "Dəqiqləşdir",
     favorite: "Seçilmişlərə əlavə et",
     favored: "Seçilmişlərdədir",
     delivery: "Anbardan sürətli göndəriş",
@@ -68,6 +85,8 @@ const detailsCopy: Record<
     inStock: "Var",
     lowStock: "Az var",
     outOfStock: "Yoxdur",
+    unknownCount: "dəqiqləşdir",
+    stockUnknownHint: "Dəqiq stok məlum deyil. Dəqiq say üçün dəstək xidməti ilə əlaqə saxlayın.",
     yes: "Bəli",
     no: "Xeyr"
   },
@@ -76,17 +95,23 @@ const detailsCopy: Record<
     loading: "Loading product...",
     notFound: "Product not found or removed.",
     retry: "Try again",
-    sku: "SKU",
+    sku: "Brand code",
     category: "Category",
     brand: "Brand",
     model: "Model",
     oem: "OEM number",
+    baku: "Baku",
+    ganja: "Ganja",
+    deliveryDays: "Delivery",
+    daysShort: "days",
     stock: "Stock",
     stockState: "Stock state",
     active: "Active",
     createdAt: "Created",
     updatedAt: "Updated",
     addToCart: "Add to cart",
+    outOfStockAction: "Out of stock",
+    clarifyAction: "Clarify",
     favorite: "Add to wishlist",
     favored: "In wishlist",
     delivery: "Fast dispatch from warehouse",
@@ -95,6 +120,8 @@ const detailsCopy: Record<
     inStock: "In stock",
     lowStock: "Low stock",
     outOfStock: "Out of stock",
+    unknownCount: "check",
+    stockUnknownHint: "Exact stock quantity is unknown. Please contact support to confirm availability.",
     yes: "Yes",
     no: "No"
   },
@@ -103,17 +130,23 @@ const detailsCopy: Record<
     loading: "Загрузка товара...",
     notFound: "Товар не найден или удален.",
     retry: "Повторить",
-    sku: "SKU",
+    sku: "Brand code",
     category: "Категория",
     brand: "Бренд",
     model: "Модель",
     oem: "OEM номер",
+    baku: "Баку",
+    ganja: "Гянджа",
+    deliveryDays: "Доставка",
+    daysShort: "дн.",
     stock: "Остаток",
     stockState: "Статус наличия",
     active: "Активность",
     createdAt: "Создан",
     updatedAt: "Обновлен",
     addToCart: "В корзину",
+    outOfStockAction: "Нет в наличии",
+    clarifyAction: "Уточнить",
     favorite: "Добавить в избранное",
     favored: "В избранном",
     delivery: "Быстрая отгрузка со склада",
@@ -122,6 +155,8 @@ const detailsCopy: Record<
     inStock: "В наличии",
     lowStock: "Мало",
     outOfStock: "Нет в наличии",
+    unknownCount: "уточнить",
+    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
     yes: "Да",
     no: "Нет"
   }
@@ -145,12 +180,19 @@ const stockStateLabelMap: Record<Language, Record<string, string>> = {
   }
 };
 
-export default function ProductDetailsPage({language, displayCurrency, currencyRates}: ProductDetailsPageProps) {
+export default function ProductDetailsPage({
+  language,
+  displayCurrency,
+  currencyRates,
+  onAddToCart,
+  isWishlisted,
+  onToggleWishlist
+}: ProductDetailsPageProps) {
   const {id} = useParams();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [favorite, setFavorite] = useState(false);
+  const [addPulse, setAddPulse] = useState(false);
   const copy = detailsCopy[language];
 
   useEffect(() => {
@@ -184,6 +226,15 @@ export default function ProductDetailsPage({language, displayCurrency, currencyR
 
   const locale = language === "ru" ? "ru-RU" : language === "en" ? "en-GB" : "az-Latn-AZ";
   const stockState = product ? stockStateLabelMap[language][product.stockState] ?? product.stockState : "—";
+  const hasUnknownStock = product ? (product.bakuCountUnknown || product.ganjaCountUnknown) : false;
+  const outOfStock = product ? product.stockQuantity <= 0 : true;
+  const addDisabled = hasUnknownStock || outOfStock;
+  const addButtonLabel = hasUnknownStock
+    ? copy.clarifyAction
+    : outOfStock
+      ? copy.outOfStockAction
+      : copy.addToCart;
+  const favorite = product ? Boolean(isWishlisted?.(product.id)) : false;
 
   const createdAt = useMemo(() => {
     if (!product?.createdAt) {
@@ -272,8 +323,17 @@ export default function ProductDetailsPage({language, displayCurrency, currencyR
               <InfoRow icon={Clock3} label={copy.updatedAt} value={updatedAt} />
               <InfoRow icon={Tag} label={copy.oem} value={product.oemNumber || "—"} />
               <InfoRow icon={Tag} label={copy.model} value={product.model || "—"} />
+              <InfoRow icon={Truck} label={copy.baku} value={resolveWarehouseCountLabel(product.bakuCount, product.bakuCountUnknown, copy.unknownCount)} />
+              <InfoRow icon={Truck} label={copy.ganja} value={resolveWarehouseCountLabel(product.ganjaCount, product.ganjaCountUnknown, copy.unknownCount)} />
+              <InfoRow icon={Clock3} label={copy.deliveryDays} value={product.deliveryDays != null ? `${product.deliveryDays} ${copy.daysShort}` : "—"} />
               <InfoRow icon={ShieldCheck} label={copy.active} value={product.active ? copy.yes : copy.no} />
             </div>
+
+            {hasUnknownStock && (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {copy.stockUnknownHint}
+              </div>
+            )}
 
             <div className="rounded-xl border border-brand-500/24 bg-brand-500/8 p-4">
               <p className="theme-heading text-3xl font-semibold text-brand-200">{formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}</p>
@@ -282,13 +342,64 @@ export default function ProductDetailsPage({language, displayCurrency, currencyR
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-600 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white">
-                <ShoppingCart className="h-4 w-4" />
-                {copy.addToCart}
-              </button>
+              <motion.button
+                animate={!addDisabled && addPulse
+                  ? {
+                    scale: [1, 1.05, 1],
+                    boxShadow: [
+                      "0 0 0 rgba(239,68,68,0)",
+                      "0 0 34px rgba(239,68,68,0.5)",
+                      "0 0 0 rgba(239,68,68,0)"
+                    ]
+                  }
+                  : {
+                    scale: 1,
+                    boxShadow: "0 0 0 rgba(239,68,68,0)"
+                  }}
+                transition={{duration: 0.48, ease: "easeOut"}}
+                type="button"
+                disabled={addDisabled}
+                onClick={() => {
+                  if (addDisabled) {
+                    return;
+                  }
+                  onAddToCart?.(product);
+                  setAddPulse(true);
+                  window.setTimeout(() => setAddPulse(false), 520);
+                }}
+                className={`relative inline-flex items-center gap-2 overflow-hidden rounded-lg px-4 py-2.5 text-sm font-medium ${
+                  addDisabled
+                    ? "cursor-not-allowed border border-white/15 bg-white/8 text-white/55"
+                    : "bg-gradient-to-r from-brand-600 to-pulse-500 text-white"
+                }`}
+              >
+                <AnimatePresence>
+                  {!addDisabled && addPulse && (
+                    <motion.span
+                      initial={{x: "-120%", opacity: 0.25}}
+                      animate={{x: "130%", opacity: 0.5}}
+                      exit={{opacity: 0}}
+                      transition={{duration: 0.44, ease: "easeOut"}}
+                      className="pointer-events-none absolute inset-y-0 w-14 -skew-x-12 bg-white/55"
+                    />
+                  )}
+                </AnimatePresence>
+                <motion.span
+                  animate={addPulse ? {y: [0, -2, 0], rotate: [0, -12, 0]} : {y: 0, rotate: 0}}
+                  transition={{duration: 0.42, ease: "easeOut"}}
+                  className="relative z-10 inline-flex"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </motion.span>
+                {addButtonLabel}
+              </motion.button>
               <button
                 type="button"
-                onClick={() => setFavorite((prev) => !prev)}
+                onClick={() => {
+                  if (product) {
+                    onToggleWishlist?.(product);
+                  }
+                }}
                 className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${favorite ? "border-brand-500/45 bg-brand-500/12 text-brand-100" : "border-white/15 theme-text"}`}
               >
                 <Heart className={`h-4 w-4 ${favorite ? "fill-current" : ""}`} />
@@ -318,4 +429,11 @@ function InfoRow({icon: Icon, label, value}: InfoRowProps) {
       <p className="theme-heading mt-1 line-clamp-1">{value}</p>
     </div>
   );
+}
+
+function resolveWarehouseCountLabel(count: number | null, unknown: boolean, unknownLabel: string): string {
+  if (unknown) {
+    return unknownLabel;
+  }
+  return String(count ?? 0);
 }

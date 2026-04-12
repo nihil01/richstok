@@ -55,20 +55,12 @@ public class SecurityConfig {
                         "/account",
                         "/account/**",
                         "/products/**",
-                        "/**/*.js",
-                        "/**/*.css",
-                        "/**/*.png",
-                        "/**/*.jpg",
-                        "/**/*.jpeg",
-                        "/**/*.svg",
-                        "/**/*.webp",
-                        "/**/*.ico",
-                        "/**/*.map"
+                        "/richstok-logo.svg"
                     ).permitAll()
                     .requestMatchers("/api/v1/catalog/**").permitAll()
                     .requestMatchers("/api/v1/brands_images").permitAll()
                     .requestMatchers("/api/v1/currency_rate").permitAll()
-                    .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/logout").permitAll()
+                    .requestMatchers("/api/v1/auth/login", "/api/v1/auth/logout").permitAll()
                     .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated()
             )

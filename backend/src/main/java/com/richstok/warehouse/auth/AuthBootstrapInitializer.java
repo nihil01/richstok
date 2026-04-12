@@ -20,7 +20,6 @@ public class AuthBootstrapInitializer implements ApplicationRunner {
         AppProperties.Bootstrap bootstrap = properties.bootstrap();
         if (bootstrap == null) {
             ensureUser("admin@richstok.local", "Richstok Admin", "Admin123!", UserRole.ADMIN);
-            ensureUser("user@richstok.local", "Richstok User", "User123!", UserRole.USER);
             return;
         }
 

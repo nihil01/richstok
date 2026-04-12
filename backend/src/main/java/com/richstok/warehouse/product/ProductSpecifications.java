@@ -52,6 +52,21 @@ public final class ProductSpecifications {
             } catch (NumberFormatException ignored) {
             }
 
+            try {
+                predicates.add(criteriaBuilder.equal(root.get("deliveryDays"), Integer.parseInt(normalizedQuery)));
+            } catch (NumberFormatException ignored) {
+            }
+
+            try {
+                predicates.add(criteriaBuilder.equal(root.get("bakuCount"), Integer.parseInt(normalizedQuery)));
+            } catch (NumberFormatException ignored) {
+            }
+
+            try {
+                predicates.add(criteriaBuilder.equal(root.get("ganjaCount"), Integer.parseInt(normalizedQuery)));
+            } catch (NumberFormatException ignored) {
+            }
+
             String normalizedUpper = normalizedQuery.toUpperCase(Locale.ROOT);
             if ("TRUE".equals(normalizedUpper) || "ACTIVE".equals(normalizedUpper)) {
                 predicates.add(criteriaBuilder.isTrue(root.get("active")));
@@ -66,6 +81,19 @@ public final class ProductSpecifications {
             }
 
             return criteriaBuilder.or(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    public static Specification<Product> byCategory(String rawCategory) {
+        return (root, query, criteriaBuilder) -> {
+            String category = rawCategory == null ? "" : rawCategory.trim();
+            if (category.isBlank()) {
+                return criteriaBuilder.conjunction();
+            }
+            return criteriaBuilder.equal(
+                    criteriaBuilder.lower(criteriaBuilder.coalesce(root.get("category"), "")),
+                    category.toLowerCase(Locale.ROOT)
+            );
         };
     }
 }

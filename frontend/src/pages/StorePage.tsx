@@ -1,11 +1,33 @@
-import {fetchBrandImages, fetchCatalogProducts, searchCatalogProducts} from "@/api/client";
+import {
+  fetchBrandImages,
+  fetchCatalogCategories,
+  fetchCatalogProductsPage,
+  searchCatalogProducts
+} from "@/api/client";
 import ProductCard from "@/components/ProductCard";
 import type {DisplayCurrency} from "@/types/currency";
-import type {Product} from "@/types/product";
+import type {Product, ProductCategorySummary} from "@/types/product";
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
 import {motion} from "framer-motion";
-import {ArrowRight, Boxes, Car, Cog, Disc3, Droplets, Filter, Search, ShieldCheck, Snowflake, Truck, Warehouse, Wrench, Zap} from "lucide-react";
+import {
+  ArrowRight,
+  Boxes,
+  Car,
+  ChevronLeft,
+  ChevronRight,
+  Cog,
+  Disc3,
+  Droplets,
+  Filter,
+  Search,
+  ShieldCheck,
+  Snowflake,
+  Truck,
+  Warehouse,
+  Wrench,
+  Zap
+} from "lucide-react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {Autoplay, FreeMode} from "swiper/modules";
@@ -27,6 +49,11 @@ const fallbackProducts: Product[] = [
     stockQuantity: 16,
     stockState: "IN_STOCK",
     brand: "Brembo",
+    bakuCount: 16,
+    bakuCountUnknown: false,
+    ganjaCount: 0,
+    ganjaCountUnknown: false,
+    deliveryDays: 1,
     active: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -44,6 +71,11 @@ const fallbackProducts: Product[] = [
     stockQuantity: 11,
     stockState: "IN_STOCK",
     brand: "Hella",
+    bakuCount: 0,
+    bakuCountUnknown: false,
+    ganjaCount: 11,
+    ganjaCountUnknown: false,
+    deliveryDays: 2,
     active: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -61,6 +93,11 @@ const fallbackProducts: Product[] = [
     stockQuantity: 7,
     stockState: "IN_STOCK",
     brand: "Garrett",
+    bakuCount: 7,
+    bakuCountUnknown: false,
+    ganjaCount: 0,
+    ganjaCountUnknown: false,
+    deliveryDays: 1,
     active: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -71,7 +108,6 @@ const storeCopy: Record<
   Language,
   {
     badge: string;
-    headlineSuffix: string;
     description: string;
     searchPlaceholder: string;
     searchButton: string;
@@ -79,90 +115,76 @@ const storeCopy: Record<
     searchEmpty: string;
     quickTitle: string;
     quickDescription: string;
-    openCatalog: string;
+    allCategories: string;
     highlights: Array<{title: string; value: string; caption: string}>;
     hitsTag: string;
     hitsTitle: string;
     allProducts: string;
     loading: string;
     error: string;
-    currencyTitle: string;
-    currencyDescription: string;
-    currencyUpdated: string;
-    currencyFallback: string;
     brandsTitle: string;
     brandsDescription: string;
     orderSteps: Array<{title: string; description: string}>;
     step: string;
-    focusNote: string;
-    quickCategories: string[];
+    categoryCount: string;
+    pagination: {page: string; of: string; prev: string; next: string};
   }
 > = {
   az: {
     badge: "Avto ehtiyat hissələri mağazası",
-    headlineSuffix: "— aktual stokla sərt avtomobil hissələri kataloqu",
     description:
-      "Biz yalnız avtomobil hissələri satırıq: orijinal və keyfiyyətli analoqlar. Xidmət yoxdur — yalnız məhsul seçimi və sürətli sifariş.",
-    searchPlaceholder: "Ad, OEM, SKU, model və ya artikul ilə axtarış",
+      "Biz yalnız avtomobil hissələri satırıq: orijinal və keyfiyyətli analoqlar.",
+    searchPlaceholder: "Ad, OEM, brand code, model və ya artikul ilə axtarış",
     searchButton: "Məhsulu tap",
     searchLoading: "Axtarılır...",
     searchEmpty: "Uyğun məhsul tapılmadı.",
-    quickTitle: "Populyar məhsul qrupları",
-    quickDescription: "Kataloq bölmələrinə sürətli keçid.",
-    openCatalog: "Tam kataloqu aç",
+    quickTitle: "Kateqoriyalar",
+    quickDescription: "Kateqoriyalar backend katalogundan real vaxtda formalaşır.",
+    allCategories: "Hamısı",
     highlights: [
-      {title: "SKU", value: "12 000+", caption: "stokda məhsul"},
+      {title: "Brand code", value: "12 000+", caption: "stokda məhsul"},
       {title: "Brendlər", value: "95+", caption: "kataloq təchizatçıları"},
       {title: "Yenilənmə", value: "24/7", caption: "stok məlumatları"},
       {title: "Anbar", value: "Live", caption: "aktual qalıqlar"}
     ],
     hitsTag: "Məhsul kataloqu",
-    hitsTitle: "Satış liderləri",
+    hitsTitle: "Məhsullar",
     allProducts: "Bütün məhsullar",
     loading: "Kataloq yüklənir...",
     error: "Kataloq yüklənmədi. Demo məhsullar göstərilir.",
-    currencyTitle: "Canlı valyuta kursları",
-    currencyDescription: "Məşhur valyutalar üzrə AZN məzənnələri canlı feed formatında yenilənir.",
-    currencyUpdated: "Son yenilənmə",
-    currencyFallback: "Kurslar müvəqqəti göstərilir",
     brandsTitle: "Stokda olan brendlər",
     brandsDescription: "Orijinal və sınanmış avtomobil hissəsi istehsalçıları.",
     orderSteps: [
-      {title: "Məhsul seçimi", description: "Ad, OEM, SKU, model və ya kateqoriya ilə tap."},
+      {title: "Məhsul seçimi", description: "Ad, OEM, brand code, model və ya kateqoriya ilə tap."},
       {title: "Stok yoxlaması", description: "Qiymət və qalıq dərhal görünür."},
       {title: "Sifariş", description: "Səbətə əlavə et və sifarişi tamamla."}
     ],
     step: "Addım",
-    focusNote: "RICHSTOK fokusunda yalnız avtomobil ehtiyat hissələrinin satışı var.",
-    quickCategories: ["Mühərrik yağları", "Elektrika", "Filtrlər", "Soyutma", "Əyləc sistemi", "Asqı", "Transmissiya", "Kuzov hissələri"]
+    categoryCount: "məhsul",
+    pagination: {page: "Səhifə", of: "/", prev: "Əvvəlki", next: "Növbəti"}
   },
   en: {
     badge: "Automotive parts store",
-    headlineSuffix: "— strict auto parts catalog with live stock",
     description:
-      "We sell only automotive parts: genuine and trusted aftermarket components. No services — only product selection and fast checkout.",
-    searchPlaceholder: "Search by name, OEM, model, category or SKU",
+      "We sell only automotive parts: genuine and trusted aftermarket components",
+    searchPlaceholder: "Search by name, OEM, model, category or brand code",
     searchButton: "Find product",
     searchLoading: "Searching...",
     searchEmpty: "No matching products found.",
-    quickTitle: "Popular product groups",
-    quickDescription: "Quick access to catalog sections.",
-    openCatalog: "Open full catalog",
+    quickTitle: "Categories",
+    quickDescription: "Category blocks are grouped directly from backend catalog data.",
+    allCategories: "All",
     highlights: [
-      {title: "SKU", value: "12,000+", caption: "items in stock"},
+      {title: "Brand code", value: "12,000+", caption: "items in stock"},
       {title: "Brands", value: "95+", caption: "catalog suppliers"},
       {title: "Updates", value: "24/7", caption: "inventory refresh"},
       {title: "Warehouse", value: "Live", caption: "actual availability"}
     ],
     hitsTag: "Product catalog",
-    hitsTitle: "Top sellers",
+    hitsTitle: "Products",
     allProducts: "All products",
     loading: "Loading catalog...",
     error: "Catalog failed to load. Demo products are shown.",
-    currencyTitle: "Live currency rates",
-    currencyDescription: "Popular currency pairs against AZN streamed in a smooth ticker feed.",
-    currencyUpdated: "Last update",
-    currencyFallback: "Showing fallback rates",
     brandsTitle: "Brands in stock",
     brandsDescription: "Genuine and proven auto parts manufacturers.",
     orderSteps: [
@@ -171,128 +193,83 @@ const storeCopy: Record<
       {title: "Place order", description: "Add items to cart and checkout."}
     ],
     step: "Step",
-    focusNote: "RICHSTOK focuses only on automotive parts and components sales.",
-    quickCategories: ["Engine oils", "Electrical", "Filters", "Cooling", "Brake system", "Suspension", "Transmission", "Body parts"]
+    categoryCount: "items",
+    pagination: {page: "Page", of: "of", prev: "Previous", next: "Next"}
   },
   ru: {
     badge: "Магазин автозапчастей",
-    headlineSuffix: "— строгий каталог автозапчастей с актуальным наличием",
     description:
-      "Мы продаем только автозапчасти: оригинал и качественные аналоги. Без услуг — только выбор товара и быстрый заказ.",
-    searchPlaceholder: "Поиск по названию, OEM, SKU, модели или артикулу",
+      "Мы продаем только автозапчасти: оригинал и качественные аналоги",
+    searchPlaceholder: "Поиск по названию, OEM, brand code, модели или артикулу",
     searchButton: "Найти товар",
     searchLoading: "Поиск...",
     searchEmpty: "Подходящих товаров не найдено.",
-    quickTitle: "Популярные группы товаров",
-    quickDescription: "Быстрый переход в разделы каталога.",
-    openCatalog: "Открыть полный каталог",
+    quickTitle: "Категории",
+    quickDescription: "Категории сгруппированы по данным каталога с backend.",
+    allCategories: "Все",
     highlights: [
-      {title: "SKU", value: "12 000+", caption: "товаров на складе"},
+      {title: "Brand code", value: "12 000+", caption: "товаров на складе"},
       {title: "Бренды", value: "95+", caption: "поставщиков в каталоге"},
       {title: "Отгрузка", value: "24/7", caption: "обновление остатков"},
       {title: "Склад", value: "Live", caption: "актуальные остатки"}
     ],
     hitsTag: "Каталог товаров",
-    hitsTitle: "Хиты продаж",
+    hitsTitle: "Товары",
     allProducts: "Все товары",
     loading: "Загрузка каталога...",
     error: "Не удалось загрузить каталог. Показаны демонстрационные товары.",
-    currencyTitle: "Живые курсы валют",
-    currencyDescription: "Популярные валюты к AZN в формате плавной движущейся ленты.",
-    currencyUpdated: "Последнее обновление",
-    currencyFallback: "Показаны резервные курсы",
     brandsTitle: "Бренды в наличии",
     brandsDescription: "Оригинальные и проверенные производители автозапчастей.",
     orderSteps: [
-      {title: "Подбор товара", description: "Ищи по названию, OEM, SKU, модели или категории."},
+      {title: "Подбор товара", description: "Ищи по названию, OEM, brand code, модели или категории."},
       {title: "Проверка наличия", description: "Сразу видны актуальные остатки и цена."},
       {title: "Оформление заказа", description: "Добавляй товар в корзину и оформляй покупку."}
     ],
     step: "Шаг",
-    focusNote: "Фокус RICHSTOK: продажа только автозапчастей и комплектующих.",
-    quickCategories: ["Моторные масла", "Электрика", "Фильтры", "Охлаждение", "Тормозная система", "Подвеска", "Трансмиссия", "Кузовные детали"]
+    categoryCount: "товаров",
+    pagination: {page: "Страница", of: "из", prev: "Назад", next: "Вперед"}
   }
 };
 
 const featuredBrands = ["BOSCH", "MANN-FILTER", "BREMBO", "HELLA", "SACHS", "MAHLE", "VALEO", "NGK", "MOBIL", "TOTAL"];
 const highlightIcons = [Boxes, ShieldCheck, Truck, Warehouse];
-const categoryIcons = [Droplets, Zap, Filter, Snowflake, Disc3, Wrench, Cog, Car];
-const categoryDetails: Record<Language, string[]> = {
-  az: [
-    "5W30, 5W40 və transmissiya yağları.",
-    "Starter, sensor və işıqlandırma.",
-    "Yağ, hava və salon filtr qrupları.",
-    "Radiator, antifriz və termostat.",
-    "Disk, kolodka və komplektlər.",
-    "Amortizator, dayaq və qollar.",
-    "ATF, debriyaj və ötürücü detallar.",
-    "Faralar, bamper və xarici hissələr."
-  ],
-  en: [
-    "5W30, 5W40 and transmission oils.",
-    "Starters, sensors and lighting units.",
-    "Oil, air and cabin filter lines.",
-    "Radiators, coolant and thermostats.",
-    "Discs, pads and complete brake kits.",
-    "Shocks, mounts and suspension arms.",
-    "ATF, clutch and drivetrain components.",
-    "Headlights, bumpers and exterior parts."
-  ],
-  ru: [
-    "Моторные и трансмиссионные масла.",
-    "Стартеры, датчики и освещение.",
-    "Линейки масляных, воздушных и салонных фильтров.",
-    "Радиаторы, антифриз и термостаты.",
-    "Диски, колодки и тормозные комплекты.",
-    "Амортизаторы, опоры и рычаги.",
-    "ATF, сцепление и элементы привода.",
-    "Фары, бамперы и кузовные элементы."
-  ]
-};
-const categoryBadgeText: Record<Language, string> = {
-  az: "Stokda",
-  en: "In stock",
-  ru: "На складе"
-};
-const categoryActionText: Record<Language, string> = {
-  az: "Bax",
-  en: "View",
-  ru: "Открыть"
-};
-const brandFeedText: Record<Language, string> = {
-  az: "Canlı brend lentası",
-  en: "Live brand stream",
-  ru: "Живая лента брендов"
-};
-const brandLogosCountLabel: Record<Language, string> = {
-  az: "logo",
-  en: "logos",
-  ru: "логотипов"
-};
+const categoryFallbackIcons = [Droplets, Zap, Filter, Snowflake, Disc3, Wrench, Cog, Car];
 
 type StorePageProps = {
   language: Language;
   displayCurrency: DisplayCurrency;
   currencyRates: Record<string, number>;
+  onAddToCart: (product: Product) => void;
 };
 
-export default function StorePage({language, displayCurrency, currencyRates}: StorePageProps) {
+export default function StorePage({language, displayCurrency, currencyRates, onAddToCart}: StorePageProps) {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [brandImages, setBrandImages] = useState<string[]>([]);
+  const [categories, setCategories] = useState<ProductCategorySummary[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+  const [overallTotalElements, setOverallTotalElements] = useState(0);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const searchRequestRef = useRef(0);
   const copy = storeCopy[language];
 
   useEffect(() => {
-    void loadProducts();
+    void loadCatalogPage(0);
+  }, [selectedCategory, catalogQuery]);
+
+  useEffect(() => {
     void loadBrandImages();
+    void loadCategories();
   }, []);
 
   useEffect(() => {
@@ -336,21 +313,48 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
           }
         }
       })();
-    }, 250);
+    }, 220);
 
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
 
-  async function loadProducts() {
+  async function loadCatalogPage(page: number) {
     try {
       setLoading(true);
-      const data = await fetchCatalogProducts();
-      setProducts(data);
+      const data = await fetchCatalogProductsPage({
+        page,
+        size: 12,
+        category: selectedCategory || undefined,
+        query: catalogQuery || undefined
+      });
+      setProducts(data.content);
+      setCurrentPage(data.page);
+      setTotalPages(Math.max(1, data.totalPages || 1));
+      setTotalElements(data.totalElements);
+      if (!selectedCategory && !catalogQuery.trim()) {
+        setOverallTotalElements(data.totalElements);
+      }
       setHasError(false);
     } catch {
       setHasError(true);
+      setProducts([]);
+      setTotalPages(1);
+      setCurrentPage(0);
+      setTotalElements(0);
+      if (!selectedCategory && !catalogQuery.trim()) {
+        setOverallTotalElements(0);
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadCategories() {
+    try {
+      const data = await fetchCatalogCategories();
+      setCategories(data);
+    } catch {
+      setCategories([]);
     }
   }
 
@@ -369,14 +373,38 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
     navigate(`/products/${productId}`);
   }
 
+  function applySearchFilter() {
+    setCatalogQuery(searchQuery.trim());
+  }
+
+  function changePage(nextPage: number) {
+    if (nextPage < 0 || nextPage >= totalPages || nextPage === currentPage) {
+      return;
+    }
+    void loadCatalogPage(nextPage);
+  }
+
   const showcaseProducts = useMemo(() => {
     if (products.length > 0) {
-      return products.slice(0, 6);
+      return products;
     }
-    return fallbackProducts;
-  }, [products]);
+    if (hasError) {
+      return fallbackProducts;
+    }
+    return [];
+  }, [products, hasError]);
+
   const mirroredBrandImages = useMemo(() => [...brandImages].reverse(), [brandImages]);
-  const activeCategoryDetails = categoryDetails[language];
+  const allProductsCount = useMemo(() => {
+    if (overallTotalElements > 0) {
+      return overallTotalElements;
+    }
+    const categoriesTotal = categories.reduce((sum, category) => sum + (Number.isFinite(category.count) ? Math.max(0, category.count) : 0), 0);
+    if (categoriesTotal > 0) {
+      return categoriesTotal;
+    }
+    return totalElements;
+  }, [overallTotalElements, categories, totalElements]);
 
   return (
     <motion.section
@@ -387,7 +415,7 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
       transition={{duration: 0.35}}
       className="space-y-8 pb-10"
     >
-      <section id="catalog" className="scroll-mt-28">
+      <section id="catalog" className="relative z-20 scroll-mt-28">
         <motion.article initial={{opacity: 0, y: 14}} animate={{opacity: 1, y: 0}} transition={{duration: 0.45}} className="glass-card rounded-2xl border border-brand-500/22 p-6 sm:p-8 lg:p-10">
           <span className="inline-flex items-center rounded-md border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[18px] uppercase tracking-[0.20em] text-brand-200">
             {copy.badge}
@@ -396,7 +424,7 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
           <p className="theme-text mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">{copy.description}</p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-[1fr,auto]">
-            <div ref={searchContainerRef} className="relative block">
+            <div ref={searchContainerRef} className="relative z-50 block">
               <Search className="theme-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
               <input
                 value={searchQuery}
@@ -411,7 +439,7 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
               />
 
               {searchDropdownOpen && searchQuery.trim().length > 0 && (
-                <div className="glass-card absolute left-0 right-0 top-[calc(100%+8px)] z-40 max-h-[32rem] overflow-y-auto rounded-xl border border-brand-500/30 p-2">
+                <div className="glass-card absolute left-0 right-0 top-[calc(100%+8px)] z-[70] max-h-[32rem] overflow-y-auto rounded-xl border border-brand-500/30 p-2">
                   {searchLoading && <p className="theme-muted px-2 py-2 text-xs">{copy.searchLoading}</p>}
                   {!searchLoading && searchResults.length === 0 && <p className="theme-muted px-2 py-2 text-xs">{copy.searchEmpty}</p>}
                   {!searchLoading &&
@@ -440,12 +468,7 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
               whileHover={{y: -1}}
               whileTap={{scale: 0.98}}
               type="button"
-              onClick={() => {
-                const firstResult = searchResults[0];
-                if (firstResult) {
-                  openProduct(firstResult.id);
-                }
-              }}
+              onClick={applySearchFilter}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-3 text-sm font-medium text-white"
             >
               {copy.searchButton}
@@ -455,54 +478,37 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
         </motion.article>
       </section>
 
-      <section id="categories" className="scroll-mt-28">
+      <section id="categories" className="relative z-10 scroll-mt-28">
         <motion.div initial={{opacity: 0, y: 14}} whileInView={{opacity: 1, y: 0}} viewport={{once: true, amount: 0.15}} transition={{duration: 0.4}} className="glass-card rounded-2xl border border-brand-500/18 p-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="theme-heading text-xl font-semibold">{copy.quickTitle}</h2>
               <p className="theme-text mt-1 text-sm">{copy.quickDescription}</p>
             </div>
-            <button type="button" className="inline-flex items-center gap-2 text-sm text-brand-200">
-              {copy.openCatalog}
-              <ArrowRight className="h-4 w-4" />
-            </button>
           </div>
 
-
-
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {copy.quickCategories.map((item, index) => {
-              const Icon = categoryIcons[index] ?? Boxes;
-              return (
-                <motion.button
-                  key={item}
-                  initial={{opacity: 0, y: 10}}
-                  whileInView={{opacity: 1, y: 0}}
-                  viewport={{once: true, amount: 0.2}}
-                  transition={{duration: 0.3, delay: 0.04 + index * 0.04}}
-                  whileHover={{y: -4, scale: 1.02}}
-                  whileTap={{scale: 0.985}}
-                  type="button"
-                  className="tile-surface category-card group rounded-xl border p-4 text-left transition hover:border-brand-400/45"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-brand-500/30 bg-brand-500/10 text-brand-200 transition group-hover:scale-105 group-hover:bg-brand-500/20">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                  </div>
-                  <p className="theme-heading text-sm font-medium">{item}</p>
-                  <p className="theme-muted mt-1 line-clamp-2 text-xs leading-relaxed">{activeCategoryDetails[index]}</p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs text-brand-200">
-                    {categoryActionText[language]}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </span>
-                </motion.button>
-              );
-            })}
+            <CategoryCard
+              key="all-categories"
+              active={!selectedCategory}
+              title={copy.allCategories}
+              subtitle={`${allProductsCount} ${copy.categoryCount}`}
+              icon={Boxes}
+              onClick={() => setSelectedCategory("")}
+            />
+            {categories.map((category, index) => (
+              <CategoryCard
+                key={category.name}
+                active={selectedCategory === category.name}
+                title={category.name}
+                subtitle={`${category.count} ${copy.categoryCount}`}
+                icon={resolveCategoryIcon(category.name, index)}
+                onClick={() => setSelectedCategory(category.name)}
+              />
+            ))}
           </div>
         </motion.div>
       </section>
-
 
       <section id="brands" className="glass-card scroll-mt-28 rounded-2xl p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -528,7 +534,7 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
                 1024: {slidesPerView: 4, spaceBetween: 16},
                 1280: {slidesPerView: 5, spaceBetween: 18}
               }}
-              >
+            >
               {brandImages.map((imageUrl, index) => (
                 <SwiperSlide key={`${imageUrl}-${index}`}>
                   <div className="tile-surface brand-slide h-20 rounded-lg border p-2">
@@ -578,11 +584,10 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
               >
                 {brand}
               </motion.span>
-              ))}
+            ))}
           </div>
         )}
       </section>
-
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {copy.highlights.map((item, index) => {
@@ -611,12 +616,9 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
             <p className="text-xs uppercase tracking-[0.2em] text-brand-200">{copy.hitsTag}</p>
             <h2 className="theme-heading mt-1 text-2xl font-semibold sm:text-3xl">{copy.hitsTitle}</h2>
           </div>
-          <button
-            type="button"
-            className="rounded-lg border border-brand-500/35 bg-brand-500/10 px-4 py-2 text-sm text-brand-100 transition hover:bg-brand-500/20"
-          >
-            {copy.allProducts}
-          </button>
+          <span className="rounded-lg border border-brand-500/35 bg-brand-500/10 px-4 py-2 text-sm text-brand-100">
+            {copy.allProducts}: {allProductsCount}
+          </span>
         </div>
 
         {loading && <div className="glass-card theme-text rounded-xl p-4">{copy.loading}</div>}
@@ -632,9 +634,36 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
               displayCurrency={displayCurrency}
               currencyRates={currencyRates}
               onOpen={openProduct}
+              onAddToCart={onAddToCart}
             />
           ))}
         </div>
+
+        {!hasError && totalPages > 1 && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => changePage(currentPage - 1)}
+              disabled={currentPage === 0}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              {copy.pagination.prev}
+            </button>
+            <span className="theme-text rounded-lg border border-white/10 px-3 py-1.5 text-xs">
+              {copy.pagination.page} {currentPage + 1} {copy.pagination.of} {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => changePage(currentPage + 1)}
+              disabled={currentPage + 1 >= totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
+            >
+              {copy.pagination.next}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
@@ -655,18 +684,67 @@ export default function StorePage({language, displayCurrency, currencyRates}: St
           </motion.article>
         ))}
       </section>
-
-      {/*<motion.div*/}
-      {/*  initial={{opacity: 0}}*/}
-      {/*  whileInView={{opacity: 1}}*/}
-      {/*  viewport={{once: true}}*/}
-      {/*  className="tile-surface theme-text rounded-xl border p-4 text-sm"*/}
-      {/*>*/}
-      {/*  <span className="inline-flex items-center gap-2 text-brand-200">*/}
-      {/*    <Wrench className="h-4 w-4" />*/}
-      {/*    {copy.focusNote}*/}
-      {/*  </span>*/}
-      {/*</motion.div>*/}
     </motion.section>
   );
+}
+
+type CategoryCardProps = {
+  title: string;
+  subtitle: string;
+  icon: typeof Boxes;
+  onClick: () => void;
+  active: boolean;
+};
+
+function CategoryCard({title, subtitle, icon: Icon, onClick, active}: CategoryCardProps) {
+  return (
+    <motion.button
+      initial={{opacity: 0, y: 10}}
+      whileInView={{opacity: 1, y: 0}}
+      viewport={{once: true, amount: 0.2}}
+      transition={{duration: 0.3}}
+      whileHover={{y: -4, scale: 1.02}}
+      whileTap={{scale: 0.985}}
+      type="button"
+      onClick={onClick}
+      className={`tile-surface category-card group rounded-xl border p-4 text-left transition hover:border-brand-400/45 ${active ? "border-brand-400/60 bg-brand-500/12" : ""}`}
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-brand-500/30 bg-brand-500/10 text-brand-200 transition group-hover:scale-105 group-hover:bg-brand-500/20">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <p className="theme-heading line-clamp-1 text-sm font-medium">{title}</p>
+      <p className="theme-muted mt-1 line-clamp-2 text-xs leading-relaxed">{subtitle}</p>
+    </motion.button>
+  );
+}
+
+function resolveCategoryIcon(categoryName: string, fallbackIndex: number) {
+  const normalized = categoryName.toLowerCase();
+  if (normalized.includes("oil") || normalized.includes("yağ") || normalized.includes("масл")) {
+    return Droplets;
+  }
+  if (normalized.includes("elect") || normalized.includes("элект") || normalized.includes("elektr")) {
+    return Zap;
+  }
+  if (normalized.includes("filter") || normalized.includes("filtr")) {
+    return Filter;
+  }
+  if (normalized.includes("cool") || normalized.includes("охлаж") || normalized.includes("soyut")) {
+    return Snowflake;
+  }
+  if (normalized.includes("brake") || normalized.includes("торм") || normalized.includes("əyləc")) {
+    return Disc3;
+  }
+  if (normalized.includes("susp") || normalized.includes("подвес") || normalized.includes("asqı")) {
+    return Wrench;
+  }
+  if (normalized.includes("trans") || normalized.includes("короб") || normalized.includes("ötürü")) {
+    return Cog;
+  }
+  if (normalized.includes("body") || normalized.includes("кузов") || normalized.includes("kuzov")) {
+    return Car;
+  }
+  return categoryFallbackIcons[fallbackIndex % categoryFallbackIcons.length] ?? Boxes;
 }

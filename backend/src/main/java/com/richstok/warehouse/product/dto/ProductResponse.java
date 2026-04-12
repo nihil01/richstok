@@ -17,6 +17,11 @@ public record ProductResponse(
         String stockState,
         String model,
         String brand,
+        Integer bakuCount,
+        boolean bakuCountUnknown,
+        Integer ganjaCount,
+        boolean ganjaCountUnknown,
+        Integer deliveryDays,
         boolean active,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

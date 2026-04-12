@@ -1,16 +1,13 @@
-import {login, register} from "@/api/client";
+import {login} from "@/api/client";
 import type {AuthUser} from "@/types/auth";
 import type {Language} from "@/types/ui";
 import {AnimatePresence, motion} from "framer-motion";
-import {Lock, Mail, UserRound, X} from "lucide-react";
+import {Lock, Mail, X} from "lucide-react";
 import {FormEvent, useEffect, useState} from "react";
-
-type AuthMode = "login" | "register";
 
 type AuthModalProps = {
   language: Language;
   open: boolean;
-  initialMode?: AuthMode;
   onClose: () => void;
   onAuthenticated: (user: AuthUser) => void;
 };
@@ -18,64 +15,46 @@ type AuthModalProps = {
 const copy: Record<
   Language,
   {
-    login: string;
-    register: string;
     title: string;
     subtitle: string;
-    fullName: string;
     email: string;
     password: string;
     submitLogin: string;
-    submitRegister: string;
     failed: string;
     support: string;
   }
 > = {
   az: {
-    login: "Giriş",
-    register: "Qeydiyyat",
     title: "RICHSTOK hesabı",
-    subtitle: "Bir pəncərədən giriş və qeydiyyat.",
-    fullName: "Ad Soyad",
+    subtitle: "Yalnız giriş. Yeni hesablar admin paneldən yaradılır.",
     email: "E-poçt",
     password: "Şifrə",
     submitLogin: "Daxil ol",
-    submitRegister: "Hesab yarat",
     failed: "Əməliyyat alınmadı. Məlumatları yoxla.",
-    support: "Sifariş və admin hüquqları hesabdan idarə olunur."
+    support: "Yeni hesab üçün adminlə əlaqə saxla."
   },
   en: {
-    login: "Login",
-    register: "Register",
     title: "RICHSTOK account",
-    subtitle: "Login and registration in one modal.",
-    fullName: "Full name",
+    subtitle: "Login only. New users are created by an admin.",
     email: "Email",
     password: "Password",
     submitLogin: "Sign in",
-    submitRegister: "Create account",
     failed: "Request failed. Check your credentials.",
-    support: "Orders and role access are managed from your account."
+    support: "Contact an admin to create your account."
   },
   ru: {
-    login: "Вход",
-    register: "Регистрация",
     title: "Аккаунт RICHSTOK",
-    subtitle: "Вход и регистрация в одном окне.",
-    fullName: "Имя и фамилия",
+    subtitle: "Только вход. Регистрация доступна только в админ-панели.",
     email: "Email",
     password: "Пароль",
     submitLogin: "Войти",
-    submitRegister: "Создать аккаунт",
     failed: "Запрос не выполнен. Проверь данные.",
-    support: "Заказы и права доступа управляются через аккаунт."
+    support: "Для создания аккаунта обратись к администратору."
   }
 };
 
-export default function AuthModal({language, open, initialMode = "login", onClose, onAuthenticated}: AuthModalProps) {
+export default function AuthModal({language, open, onClose, onAuthenticated}: AuthModalProps) {
   const ui = copy[language];
-  const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,16 +64,15 @@ export default function AuthModal({language, open, initialMode = "login", onClos
     if (!open) {
       return;
     }
-    setMode(initialMode);
     setError(null);
-  }, [initialMode, open]);
+  }, [open]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     try {
       setLoading(true);
       setError(null);
-      const user = mode === "login" ? await login({email, password}) : await register({fullName, email, password});
+      const user = await login({email, password});
       onAuthenticated(user);
       onClose();
     } catch {
@@ -129,40 +107,16 @@ export default function AuthModal({language, open, initialMode = "login", onClos
               </button>
             </div>
 
-            <div className="relative mb-5 grid grid-cols-2 rounded-xl bg-black/20 p-1">
-              <button type="button" onClick={() => setMode("login")} className={`relative z-10 rounded-lg px-3 py-2 text-sm font-medium transition ${mode === "login" ? "text-white" : "theme-text"}`}>
-                {ui.login}
-              </button>
-              <button type="button" onClick={() => setMode("register")} className={`relative z-10 rounded-lg px-3 py-2 text-sm font-medium transition ${mode === "register" ? "text-white" : "theme-text"}`}>
-                {ui.register}
-              </button>
-              <motion.span
-                layout
-                transition={{type: "spring", stiffness: 320, damping: 30}}
-                className={`absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-lg bg-gradient-to-r from-brand-600 to-pulse-500 ${mode === "login" ? "left-1" : "left-[calc(50%+2px)]"}`}
-              />
-            </div>
-
             <AnimatePresence mode="wait" initial={false}>
               <motion.form
-                key={mode}
-                initial={{opacity: 0, x: mode === "login" ? -14 : 14}}
+                key="login"
+                initial={{opacity: 0, x: -14}}
                 animate={{opacity: 1, x: 0}}
-                exit={{opacity: 0, x: mode === "login" ? 14 : -14}}
+                exit={{opacity: 0, x: 14}}
                 transition={{duration: 0.2}}
                 onSubmit={handleSubmit}
                 className="relative space-y-3"
               >
-                {mode === "register" && (
-                  <label className="block text-sm">
-                    <span className="theme-text mb-1 block">{ui.fullName}</span>
-                    <div className="input-surface flex items-center gap-2 rounded-xl border px-3 py-2">
-                      <UserRound className="h-4 w-4 text-brand-300" />
-                      <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full bg-transparent text-sm outline-none" />
-                    </div>
-                  </label>
-                )}
-
                 <label className="block text-sm">
                   <span className="theme-text mb-1 block">{ui.email}</span>
                   <div className="input-surface flex items-center gap-2 rounded-xl border px-3 py-2">
@@ -186,7 +140,7 @@ export default function AuthModal({language, open, initialMode = "login", onClos
                   disabled={loading}
                   className="w-full rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-65"
                 >
-                  {loading ? "..." : mode === "login" ? ui.submitLogin : ui.submitRegister}
+                  {loading ? "..." : ui.submitLogin}
                 </button>
               </motion.form>
             </AnimatePresence>

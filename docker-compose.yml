@@ -19,5 +19,72 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: richstok-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: richstok-backend:latest
+    container_name: richstok-backend
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    environment:
+      # ===== SERVER =====
+      APPLICATION_PORT: 8080
+
+      # ===== DATABASE =====
+      DB_URL: jdbc:postgresql://postgres:5432/richstok
+      DB_USERNAME: richstok
+      DB_PASSWORD: richstok
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # ===== STATIC =====
+      BRAND_IMAGES: /app/static/brands
+      SPRING_WEB_RESOURCES_STATIC_LOCATIONS: file:/app/static/,classpath:/static/
+
+      # ===== CORS =====
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+
+      # ===== SECURITY =====
+      JWT_SECRET: UmljaHN0b2stU3BhcmstU2VjdXJlLUpXVC1LZXktMjAyNg==
+      JWT_EXPIRATION_SECONDS: 259200
+
+      AUTH_COOKIE_NAME: RICHSTOK_AUTH
+      AUTH_COOKIE_SECURE: "true"
+      AUTH_COOKIE_SAME_SITE: Lax
+      AUTH_COOKIE_MAX_AGE_SECONDS: 259200
+
+      # ===== BOOTSTRAP USERS =====
+      BOOTSTRAP_ADMIN_EMAIL: admin@richstok.local
+      BOOTSTRAP_ADMIN_PASSWORD: Admin123!
+      BOOTSTRAP_ADMIN_FULL_NAME: Richstok Admin
+
+      BOOTSTRAP_USER_EMAIL: user@richstok.local
+      BOOTSTRAP_USER_PASSWORD: User123!
+      BOOTSTRAP_USER_FULL_NAME: Richstok User
+
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres_data:
+  redis_data:

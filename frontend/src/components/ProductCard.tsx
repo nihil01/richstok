@@ -1,9 +1,10 @@
-import {motion} from "framer-motion";
+import {AnimatePresence, motion} from "framer-motion";
 import {Gauge, ImageOff, PackageCheck, ShieldCheck, ShoppingCart} from "lucide-react";
 import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
+import {useState} from "react";
 
 type ProductCardProps = {
   product: Product;
@@ -12,32 +13,84 @@ type ProductCardProps = {
   displayCurrency: DisplayCurrency;
   currencyRates: Record<string, number>;
   onOpen?: (productId: number) => void;
+  onAddToCart?: (product: Product) => void;
 };
 
-const cardCopy: Record<Language, {defaultDescription: string; verified: string; stock: string; addToCart: string}> = {
+const cardCopy: Record<
+  Language,
+  {
+    defaultDescription: string;
+    verified: string;
+    stock: string;
+    addToCart: string;
+    outOfStockAction: string;
+    clarifyAction: string;
+    baku: string;
+    ganja: string;
+    delivery: string;
+    days: string;
+    stockUnknownHint: string;
+    unknownCount: string;
+  }
+> = {
   az: {
     defaultDescription: "Avtomobilin sabit və təhlükəsiz işi üçün premium detal.",
     verified: "Yoxlanılıb",
     stock: "Mövcud:",
-    addToCart: "Səbətə at"
+    addToCart: "Səbətə at",
+    outOfStockAction: "Yoxdur",
+    clarifyAction: "Dəqiqləşdir",
+    baku: "Bakı",
+    ganja: "Gəncə",
+    delivery: "Çatdırılma",
+    days: "gün",
+    stockUnknownHint: "Dəqiq say məlum deyil. Dəqiq stok üçün dəstək xidməti ilə əlaqə saxla.",
+    unknownCount: "dəqiqləşdir"
   },
   en: {
     defaultDescription: "Premium component for stable and safe vehicle performance.",
     verified: "Verified",
     stock: "Stock:",
-    addToCart: "Add to cart"
+    addToCart: "Add to cart",
+    outOfStockAction: "Out of stock",
+    clarifyAction: "Clarify",
+    baku: "Baku",
+    ganja: "Ganja",
+    delivery: "Delivery",
+    days: "days",
+    stockUnknownHint: "Exact quantity is unknown. Please contact support to confirm stock.",
+    unknownCount: "check"
   },
   ru: {
     defaultDescription: "Премиальная деталь для стабильной и безопасной работы авто.",
     verified: "Проверено",
     stock: "Наличие:",
-    addToCart: "В корзину"
+    addToCart: "В корзину",
+    outOfStockAction: "Нет в наличии",
+    clarifyAction: "Уточнить",
+    baku: "Баку",
+    ganja: "Гянджа",
+    delivery: "Доставка",
+    days: "дн.",
+    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
+    unknownCount: "уточнить"
   }
 };
 
-export default function ProductCard({product, index = 0, language, displayCurrency, currencyRates, onOpen}: ProductCardProps) {
+export default function ProductCard({product, index = 0, language, displayCurrency, currencyRates, onOpen, onAddToCart}: ProductCardProps) {
   const stockProgress = Math.min(100, Math.round((product.stockQuantity / 120) * 100));
   const copy = cardCopy[language];
+  const [addedPulse, setAddedPulse] = useState(false);
+  const hasUnknownStock = product.bakuCountUnknown || product.ganjaCountUnknown;
+  const outOfStock = product.stockQuantity <= 0;
+  const addDisabled = hasUnknownStock || outOfStock;
+  const addButtonLabel = hasUnknownStock
+    ? copy.clarifyAction
+    : outOfStock
+      ? copy.outOfStockAction
+      : copy.addToCart;
+  const bakuLabel = product.bakuCountUnknown ? copy.unknownCount : String(product.bakuCount ?? 0);
+  const ganjaLabel = product.ganjaCountUnknown ? copy.unknownCount : String(product.ganjaCount ?? 0);
 
   return (
     <motion.article
@@ -72,12 +125,14 @@ export default function ProductCard({product, index = 0, language, displayCurren
         <div className="theme-text mt-4 flex flex-wrap items-center gap-2 text-xs">
           <span className="badge-surface inline-flex items-center gap-1.5 rounded-md px-2 py-1.5">
             <Gauge className="h-3.5 w-3.5 text-brand-200" />
-            SKU: {product.sku}
+            Brand code: {product.sku}
           </span>
+
           <span className="badge-surface inline-flex items-center gap-1.5 rounded-md px-2 py-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-brand-300" />
-            {product.category} · {copy.verified}
+            <Gauge className="h-3.5 w-3.5 text-brand-200" />
+            OEM: {product.oemNumber}
           </span>
+
         </div>
 
         <div className="mt-4">
@@ -97,6 +152,14 @@ export default function ProductCard({product, index = 0, language, displayCurren
               className="h-full rounded-full bg-gradient-to-r from-brand-400 to-pulse-500"
             />
           </div>
+          <p className="theme-muted mt-2 text-xs">
+            {copy.baku}: {bakuLabel} · {copy.ganja}: {ganjaLabel}
+          </p>
+          {hasUnknownStock && (
+            <p className="mt-2 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-100">
+              {copy.stockUnknownHint}
+            </p>
+          )}
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-3">
@@ -104,13 +167,57 @@ export default function ProductCard({product, index = 0, language, displayCurren
             {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}
           </strong>
           <motion.button
-            whileTap={{scale: 0.97}}
+            animate={!addDisabled && addedPulse
+              ? {
+                scale: [1, 1.06, 1],
+                boxShadow: [
+                  "0 0 0 rgba(239,68,68,0)",
+                  "0 0 34px rgba(239,68,68,0.52)",
+                  "0 0 0 rgba(239,68,68,0)"
+                ]
+              }
+              : {
+                scale: 1,
+                boxShadow: "0 0 0 rgba(239,68,68,0)"
+              }}
+            transition={{duration: 0.48, ease: "easeOut"}}
+            whileTap={addDisabled ? undefined : {scale: 0.97}}
             type="button"
-            onClick={(event) => event.stopPropagation()}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-600 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            disabled={addDisabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (addDisabled) {
+                return;
+              }
+              onAddToCart?.(product);
+              setAddedPulse(true);
+              window.setTimeout(() => setAddedPulse(false), 520);
+            }}
+            className={`relative inline-flex items-center gap-2 overflow-hidden rounded-lg px-4 py-2.5 text-sm font-medium ${
+              addDisabled
+                ? "cursor-not-allowed border border-white/15 bg-white/8 text-white/55"
+                : "bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition-opacity hover:opacity-90"
+            }`}
           >
-            <ShoppingCart className="h-4 w-4" />
-            {copy.addToCart}
+            <AnimatePresence>
+              {!addDisabled && addedPulse && (
+                <motion.span
+                  initial={{x: "-120%", opacity: 0.25}}
+                  animate={{x: "130%", opacity: 0.5}}
+                  exit={{opacity: 0}}
+                  transition={{duration: 0.44, ease: "easeOut"}}
+                  className="pointer-events-none absolute inset-y-0 w-14 -skew-x-12 bg-white/55"
+                />
+              )}
+            </AnimatePresence>
+            <motion.span
+              animate={addedPulse ? {y: [0, -2, 0], rotate: [0, -12, 0]} : {y: 0, rotate: 0}}
+              transition={{duration: 0.42, ease: "easeOut"}}
+              className="relative z-10 inline-flex"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </motion.span>
+            {addButtonLabel}
           </motion.button>
         </div>
       </div>

@@ -17,6 +17,11 @@ public record ProductRequest(
         @Pattern(regexp = "IN_STOCK|LOW_STOCK|OUT_OF_STOCK") String stockState,
         @Size(max = 60) String model,
         @Size(max = 120) String brand,
+        @PositiveOrZero Integer bakuCount,
+        Boolean bakuCountUnknown,
+        @PositiveOrZero Integer ganjaCount,
+        Boolean ganjaCountUnknown,
+        @PositiveOrZero Integer deliveryDays,
         boolean active
 ) {
 }

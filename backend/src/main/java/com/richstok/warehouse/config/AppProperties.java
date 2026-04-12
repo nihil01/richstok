@@ -8,7 +8,8 @@ public record AppProperties(
         Cors cors,
         Security security,
         Bootstrap bootstrap,
-        Brands brands
+        Brands brands,
+        Mail mail
 ) {
     public record Cors(List<String> allowedOrigins) {}
 
@@ -33,4 +34,10 @@ public record AppProperties(
                 String fullName
         ) {}
     }
+
+    public record Mail(
+            boolean enabled,
+            String from,
+            String appName
+    ) {}
 }

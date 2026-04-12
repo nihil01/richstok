@@ -14,6 +14,11 @@ export type Product = {
   stockState: StockState;
   model?: string | null;
   brand: string | null;
+  bakuCount: number | null;
+  bakuCountUnknown: boolean;
+  ganjaCount: number | null;
+  ganjaCountUnknown: boolean;
+  deliveryDays: number | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +37,11 @@ export type ProductPayload = {
   stockState: StockState;
   brand: string;
   model: string;
+  bakuCount: number;
+  bakuCountUnknown?: boolean;
+  ganjaCount: number;
+  ganjaCountUnknown?: boolean;
+  deliveryDays: number;
   active: boolean;
 };
 
@@ -40,4 +50,18 @@ export type ProductBulkImportResponse = {
   updated: number;
   skipped: number;
   errors: string[];
+};
+
+export type ProductCategorySummary = {
+  name: string;
+  count: number;
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
 };

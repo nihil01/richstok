@@ -34,6 +34,27 @@ public class AppUser {
     @Column(nullable = false, length = 120)
     private String fullName;
 
+    @Column(length = 40)
+    private String phone;
+
+    @Column(length = 40)
+    private String phoneAlt;
+
+    @Column(length = 220)
+    private String addressLine1;
+
+    @Column(length = 220)
+    private String addressLine2;
+
+    @Column(length = 120)
+    private String city;
+
+    @Column(length = 40)
+    private String postalCode;
+
+    @Column(length = 120)
+    private String country;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserRole role;

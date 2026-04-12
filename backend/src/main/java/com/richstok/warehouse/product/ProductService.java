@@ -1,6 +1,8 @@
 package com.richstok.warehouse.product;
 
 import com.richstok.warehouse.common.NotFoundException;
+import com.richstok.warehouse.common.dto.PageResponse;
+import com.richstok.warehouse.product.dto.CatalogCategoryResponse;
 import com.richstok.warehouse.product.dto.ProductBulkImportResponse;
 import com.richstok.warehouse.product.dto.ProductRequest;
 import com.richstok.warehouse.product.dto.ProductResponse;
@@ -10,6 +12,9 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,8 +24,11 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -33,22 +41,71 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getActiveProducts() {
-        return productRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream()
+        return getCatalogProducts().stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<ProductResponse> getActiveProductsPage(int page, int size, String category, String query) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.clamp(size, 1, 60);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        var specification = ProductSpecifications.byCategory(category).and(ProductSpecifications.bySearchQuery(query));
+        if (isCatalogActiveFilterEnabled()) {
+            specification = ProductSpecifications.activeOnly().and(specification);
+        }
+
+        Page<ProductResponse> mappedPage = productRepository.findAll(specification, pageable).map(this::toResponse);
+        return new PageResponse<>(
+                mappedPage.getContent(),
+                mappedPage.getNumber(),
+                mappedPage.getSize(),
+                mappedPage.getTotalElements(),
+                mappedPage.getTotalPages(),
+                mappedPage.isLast()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<CatalogCategoryResponse> getCatalogCategories() {
+        Map<String, Long> categoryCounters = new LinkedHashMap<>();
+        Map<String, String> categoryLabels = new LinkedHashMap<>();
+
+        for (Product product : getCatalogProducts()) {
+            String normalizedCategory = normalizeCatalogCategory(product.getCategory());
+            if (normalizedCategory == null) {
+                continue;
+            }
+            String categoryKey = normalizedCategory.toLowerCase(Locale.ROOT);
+            categoryCounters.merge(categoryKey, 1L, Long::sum);
+            categoryLabels.putIfAbsent(categoryKey, normalizedCategory);
+        }
+
+        return categoryCounters.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(value -> value.toLowerCase(Locale.ROOT))))
+                .map(entry -> new CatalogCategoryResponse(categoryLabels.get(entry.getKey()), entry.getValue()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public ProductResponse getActiveBySlug(String slug) {
-        Product product = productRepository.findBySlugAndActiveTrue(slug)
-                .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
+        Product product = isCatalogActiveFilterEnabled()
+                ? productRepository.findBySlugAndActiveTrue(slug)
+                    .orElseThrow(() -> new NotFoundException("Product not found: " + slug))
+                : productRepository.findBySlugIgnoreCase(slug)
+                    .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
         return toResponse(product);
     }
 
     @Transactional(readOnly = true)
     public ProductResponse getActiveById(Long id) {
-        Product product = productRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new NotFoundException("Product id not found: " + id));
+        Product product = isCatalogActiveFilterEnabled()
+                ? productRepository.findByIdAndActiveTrue(id)
+                    .orElseThrow(() -> new NotFoundException("Product id not found: " + id))
+                : productRepository.findById(id)
+                    .orElseThrow(() -> new NotFoundException("Product id not found: " + id));
         return toResponse(product);
     }
 
@@ -58,12 +115,21 @@ public class ProductService {
             return getActiveProducts();
         }
 
+        if (isCatalogActiveFilterEnabled()) {
+            return productRepository.findAll(
+                            ProductSpecifications.activeOnly().and(ProductSpecifications.bySearchQuery(query)),
+                            Sort.by(Sort.Direction.DESC, "createdAt")
+                    ).stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+
         return productRepository.findAll(
-                ProductSpecifications.activeOnly().and(ProductSpecifications.bySearchQuery(query)),
-                Sort.by(Sort.Direction.DESC, "createdAt")
-            ).stream()
-            .map(this::toResponse)
-            .toList();
+                        ProductSpecifications.bySearchQuery(query),
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                ).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -157,14 +223,15 @@ public class ProductService {
         String baseDescription = normalizeNullable(readStringCell(row, mapping.descriptionColumn()));
         String bakiRaw = readStringCell(row, mapping.bakiColumn());
         String gancaRaw = readStringCell(row, mapping.gancaColumn());
-//        String leadTime = normalizeNullable(readStringCell(row, mapping.leadTimeColumn()));
+        String gunRaw = readStringCell(row, mapping.leadTimeColumn());
         String priceRaw = readStringCell(row, mapping.priceColumn());
 
         if ((name == null || name.isBlank())
                 && (sku == null || sku.isBlank())
                 && (priceRaw == null || priceRaw.isBlank())
                 && (bakiRaw == null || bakiRaw.isBlank())
-                && (gancaRaw == null || gancaRaw.isBlank())) {
+                && (gancaRaw == null || gancaRaw.isBlank())
+                && (gunRaw == null || gunRaw.isBlank())) {
             return null;
         }
 
@@ -174,7 +241,7 @@ public class ProductService {
         }
 
         if (sku == null || sku.isBlank()) {
-            addRowError(errors, "Row " + humanRowNumber + ": SKU (BREND KODU) is empty.");
+            addRowError(errors, "Row " + humanRowNumber + ": brand code (BREND KODU) is empty.");
             return null;
         }
 
@@ -183,7 +250,19 @@ public class ProductService {
             return null;
         }
 
-        if (model == null || model.isBlank()){
+        StockCell bakuStock = parseWarehouseCount(bakiRaw, humanRowNumber, "BAKI", errors);
+        StockCell ganjaStock = parseWarehouseCount(gancaRaw, humanRowNumber, "GANCA", errors);
+        if (bakuStock == null || ganjaStock == null) {
+            return null;
+        }
+
+        Integer deliveryDays = parseDeliveryDays(gunRaw);
+        if (deliveryDays == null) {
+            addRowError(errors, "Row " + humanRowNumber + ": delivery days (GUN) is empty or invalid.");
+            return null;
+        }
+
+        if (model == null || model.isBlank()) {
             model = "-";
         }
 
@@ -192,12 +271,7 @@ public class ProductService {
 
         try {
             price = parseDecimal(priceRaw);
-            stockResolution = resolveStockQuantity(bakiRaw, gancaRaw);
-
-            if (stockResolution == null) {
-                addRowError(errors, "Row " + humanRowNumber + ": stock cannot be resolved from BAKİ/GANCA.");
-                return null;
-            }
+            stockResolution = resolveStockQuantity(bakuStock, ganjaStock);
 
             if (price.signum() < 0) {
                 addRowError(errors, "Row " + humanRowNumber + ": price must be non-negative.");
@@ -215,7 +289,7 @@ public class ProductService {
 
         String description = buildDescription(baseDescription);
         String category = inferCategory(name, description);
-        boolean active = stockResolution.quantity() > 0;
+        boolean active = true;
 
         return new ParsedRow(
                 name.trim(),
@@ -230,7 +304,12 @@ public class ProductService {
                 brand,
                 active,
                 null,
-                model
+                model,
+                bakuStock.quantity(),
+                bakuStock.unknownQuantity(),
+                ganjaStock.quantity(),
+                ganjaStock.unknownQuantity(),
+                deliveryDays
         );
     }
 
@@ -255,8 +334,6 @@ public class ProductService {
             String rawHeader = readStringCell(headerRow, index);
             String normalized = normalizeHeader(rawHeader);
 
-            System.out.println(normalized);
-
             switch (normalized) {
                 case "brend" -> brandColumn = index;
                 case "brendkodu", "brandcode", "artikul" -> skuColumn = index;
@@ -264,8 +341,8 @@ public class ProductService {
                 case "mehsulunadi", "mehsuladi", "name" -> nameColumn = index;
                 case "model" -> modelColumn = index;
                 case "tesvir", "description" -> descriptionColumn = index;
-                case "baki", "baku" -> bakiColumn = index;
-                case "ganca", "ganja" -> gancaColumn = index;
+                case "baki", "baku", "bakicount", "bakucount" -> bakiColumn = index;
+                case "ganca", "ganja", "gence", "gancacount", "ganjacount" -> gancaColumn = index;
                 case "gun" -> leadTimeColumn = index;
                 case "qiymetazn", "priceazn", "price" -> priceColumn = index;
                 default -> {
@@ -277,14 +354,13 @@ public class ProductService {
                 || skuColumn == null
                 || oemColumn == null
                 || nameColumn == null
-                || bakiColumn == null
-                || gancaColumn == null
                 || leadTimeColumn == null
-                || priceColumn == null) {
+                || priceColumn == null
+                || !hasWarehouseColumns(bakiColumn, gancaColumn)) {
             throw new IllegalArgumentException("""
                 Excel header does not match required format.
                 Required columns:
-                BREND, BREND KODU, OEM KODU, MƏHSULUN ADI, BAKİ, GANCA, GÜN, QİYMƏT AZN
+                BREND, BREND KODU, OEM KODU, MƏHSULUN ADI, BAKI, GANCA, GUN, QİYMƏT AZN
                 """);
         }
 
@@ -311,8 +387,8 @@ public class ProductService {
             int nameColumn,
             Integer modelColumn,
             Integer descriptionColumn,
-            int bakiColumn,
-            int gancaColumn,
+            Integer bakiColumn,
+            Integer gancaColumn,
             int leadTimeColumn,
             int priceColumn
     ) {
@@ -329,6 +405,18 @@ public class ProductService {
     private void applyRequest(Product product, ProductRequest request, Long currentProductId) {
         String normalizedSku = normalizeSku(request.sku());
         ensureUniqueSku(normalizedSku, currentProductId);
+        int normalizedStockQuantity = normalizeStockQuantity(request.stockQuantity());
+        Integer normalizedBakuCount = normalizeWarehouseCount(request.bakuCount(), "Baku count");
+        Integer normalizedGanjaCount = normalizeWarehouseCount(request.ganjaCount(), "Ganja count");
+        boolean bakuCountUnknown = request.bakuCountUnknown() != null ? request.bakuCountUnknown() : product.isBakuCountUnknown();
+        boolean ganjaCountUnknown = request.ganjaCountUnknown() != null ? request.ganjaCountUnknown() : product.isGanjaCountUnknown();
+        WarehouseStockDistribution stockDistribution =
+                resolveWarehouseDistribution(normalizedStockQuantity, normalizedBakuCount, normalizedGanjaCount);
+        StockState resolvedStockState = resolveManualStockState(
+                request.stockState(),
+                stockDistribution.totalQuantity(),
+                bakuCountUnknown || ganjaCountUnknown
+        );
 
         ParsedRow parsedRow = new ParsedRow(
                 request.name().trim(),
@@ -338,12 +426,17 @@ public class ProductService {
                 normalizeNullable(request.description()),
                 normalizeImageUrl(request.imageUrl()),
                 request.price(),
-                request.stockQuantity(),
-                resolveManualStockState(request.stockState(), request.stockQuantity()),
+                stockDistribution.totalQuantity(),
+                resolvedStockState,
                 normalizeNullable(request.brand()),
                 request.active(),
                 resolveUniqueSlug(request.slug(), request.name(), normalizedSku, currentProductId),
-                request.model()
+                request.model(),
+                stockDistribution.bakuCount(),
+                bakuCountUnknown,
+                stockDistribution.ganjaCount(),
+                ganjaCountUnknown,
+                normalizeDeliveryDays(request.deliveryDays())
         );
 
         applyParsedRow(product, parsedRow, currentProductId);
@@ -364,6 +457,11 @@ public class ProductService {
         product.setBrand(parsedRow.brand());
         product.setActive(parsedRow.active());
         product.setModel(parsedRow.model());
+        product.setBakuCount(parsedRow.bakuCount());
+        product.setBakuCountUnknown(parsedRow.bakuCountUnknown());
+        product.setGanjaCount(parsedRow.ganjaCount());
+        product.setGanjaCountUnknown(parsedRow.ganjaCountUnknown());
+        product.setDeliveryDays(parsedRow.deliveryDays());
     }
 
     private ProductResponse toResponse(Product product) {
@@ -381,6 +479,11 @@ public class ProductService {
                 product.getStockState().name(),
                 product.getModel(),
                 product.getBrand(),
+                product.getBakuCount(),
+                product.isBakuCountUnknown(),
+                product.getGanjaCount(),
+                product.isGanjaCountUnknown(),
+                product.getDeliveryDays(),
                 product.isActive(),
                 product.getCreatedAt(),
                 product.getUpdatedAt()
@@ -414,10 +517,10 @@ public class ProductService {
 
     private void ensureUniqueSku(String sku, Long currentProductId) {
         if (currentProductId == null && productRepository.existsBySkuIgnoreCase(sku)) {
-            throw new IllegalArgumentException("SKU already exists: " + sku);
+            throw new IllegalArgumentException("Brand code already exists: " + sku);
         }
         if (currentProductId != null && productRepository.existsBySkuIgnoreCaseAndIdNot(sku, currentProductId)) {
-            throw new IllegalArgumentException("SKU already exists: " + sku);
+            throw new IllegalArgumentException("Brand code already exists: " + sku);
         }
     }
 
@@ -442,21 +545,57 @@ public class ProductService {
         return new BigDecimal(normalized);
     }
 
-    private StockResolution resolveStockQuantity(String primaryStock, String secondaryStock) {
-        StockCell primary = parseStockValue(primaryStock);
-        StockCell secondary = parseStockValue(secondaryStock);
-        if (primary == null && secondary == null) {
+    private StockResolution resolveStockQuantity(StockCell bakuStock, StockCell ganjaStock) {
+        int quantity = bakuStock.quantity() + ganjaStock.quantity();
+        if (quantity > 0) {
+            return new StockResolution(quantity, deriveStockStateByQuantity(quantity));
+        }
+        boolean hasUnknownQuantity = bakuStock.unknownQuantity() || ganjaStock.unknownQuantity();
+        if (hasUnknownQuantity) {
+            StockState unknownState = bakuStock.stockState() == StockState.IN_STOCK || ganjaStock.stockState() == StockState.IN_STOCK
+                    ? StockState.IN_STOCK
+                    : StockState.LOW_STOCK;
+            return new StockResolution(0, unknownState);
+        }
+        return new StockResolution(0, StockState.OUT_OF_STOCK);
+    }
+
+    private Integer parseDeliveryDays(String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null) {
             return null;
         }
-        if (primary == null) {
-            return new StockResolution(secondary.quantity(), secondary.stockState());
+        try {
+            if (normalized.matches("\\d+")) {
+                return Integer.parseInt(normalized);
+            }
+            if (normalized.matches("\\d+[.,]\\d+")) {
+                return (int) Math.round(Double.parseDouble(normalized.replace(",", ".")));
+            }
+            if (normalized.matches("\\d+\\s*[-/]\\s*\\d+")) {
+                String[] parts = normalized.split("[-/]");
+                int first = Integer.parseInt(parts[0].trim());
+                int second = Integer.parseInt(parts[1].trim());
+                return Math.max(first, second);
+            }
+        } catch (NumberFormatException ignored) {
+            return null;
         }
-        if (secondary == null) {
-            return new StockResolution(primary.quantity(), primary.stockState());
+        return null;
+    }
+
+    private StockCell parseWarehouseCount(String rawValue, int humanRowNumber, String columnName, List<String> errors) {
+        String normalized = normalizeNullable(rawValue);
+        if (normalized == null) {
+            return new StockCell(0, StockState.OUT_OF_STOCK, false);
         }
-        int quantity = primary.quantity() + secondary.quantity();
-        StockState stockState = mergeStockState(primary.stockState(), secondary.stockState(), quantity);
-        return new StockResolution(quantity, stockState);
+
+        StockCell parsed = parseStockValue(normalized);
+        if (parsed == null) {
+            addRowError(errors, "Row " + humanRowNumber + ": " + columnName + " value is invalid.");
+            return null;
+        }
+        return parsed;
     }
 
     private StockCell parseStockValue(String value) {
@@ -469,18 +608,18 @@ public class ProductService {
         try {
             if (trimmed.matches("\\d+")) {
                 int quantity = Integer.parseInt(trimmed);
-                return new StockCell(quantity, deriveStockStateByQuantity(quantity));
+                return new StockCell(quantity, deriveStockStateByQuantity(quantity), false);
             }
 
             if (trimmed.matches("\\d+[.,]\\d+")) {
                 int quantity = (int) Math.round(Double.parseDouble(trimmed.replace(",", ".")));
-                return new StockCell(quantity, deriveStockStateByQuantity(quantity));
+                return new StockCell(quantity, deriveStockStateByQuantity(quantity), false);
             }
 
             if (trimmed.matches("\\d+\\s*[-/]\\s*\\d+")) {
                 String[] parts = trimmed.split("[-/]");
                 int quantity = Integer.parseInt(parts[0].trim());
-                return new StockCell(quantity, deriveStockStateByQuantity(quantity));
+                return new StockCell(quantity, deriveStockStateByQuantity(quantity), false);
             }
         } catch (NumberFormatException ignored) {
         }
@@ -492,7 +631,7 @@ public class ProductService {
                 || normalized.equals("yoxdur")
                 || normalized.contains("outofstock")
                 || normalized.contains("netvnalichii")) {
-            return new StockCell(0, StockState.OUT_OF_STOCK);
+            return new StockCell(0, StockState.OUT_OF_STOCK, false);
         }
 
         if (normalized.equals("azvar")
@@ -500,21 +639,24 @@ public class ProductService {
                 || normalized.contains("few")
                 || normalized.contains("lowstock")
                 || normalized.contains("malo")) {
-            return new StockCell(3, StockState.LOW_STOCK);
+            return new StockCell(0, StockState.LOW_STOCK, true);
         }
 
         if (normalized.equals("var")
                 || normalized.contains("instock")
                 || normalized.contains("available")
                 || normalized.contains("vnalichii")) {
-            return new StockCell(10, StockState.IN_STOCK);
+            return new StockCell(0, StockState.IN_STOCK, true);
         }
 
         return null;
     }
 
-    private StockState resolveManualStockState(String requestedState, int stockQuantity) {
+    private StockState resolveManualStockState(String requestedState, int stockQuantity, boolean hasUnknownStock) {
         if (requestedState == null || requestedState.isBlank()) {
+            if (hasUnknownStock && stockQuantity <= 0) {
+                return StockState.LOW_STOCK;
+            }
             return deriveStockStateByQuantity(stockQuantity);
         }
         return StockState.valueOf(requestedState);
@@ -528,22 +670,6 @@ public class ProductService {
             return StockState.LOW_STOCK;
         }
         return StockState.IN_STOCK;
-    }
-
-    private StockState mergeStockState(StockState firstState, StockState secondState, int quantity) {
-        if (quantity <= 0) {
-            return StockState.OUT_OF_STOCK;
-        }
-        if (firstState == StockState.LOW_STOCK || secondState == StockState.LOW_STOCK) {
-            return quantity <= 5 ? StockState.LOW_STOCK : StockState.IN_STOCK;
-        }
-        if (firstState == StockState.OUT_OF_STOCK && secondState == StockState.OUT_OF_STOCK) {
-            return StockState.OUT_OF_STOCK;
-        }
-        if (firstState == StockState.IN_STOCK || secondState == StockState.IN_STOCK) {
-            return StockState.IN_STOCK;
-        }
-        return deriveStockStateByQuantity(quantity);
     }
 
     private String inferCategory(String name, String description) {
@@ -565,11 +691,35 @@ public class ProductService {
         return baseDescription;
     }
 
+    private boolean hasWarehouseColumns(Integer bakiColumn, Integer gancaColumn) {
+        return bakiColumn != null && gancaColumn != null;
+    }
+
+    private WarehouseStockDistribution resolveWarehouseDistribution(
+            int stockQuantity,
+            Integer bakuCount,
+            Integer ganjaCount
+    ) {
+        boolean hasWarehouseCounts = bakuCount != null || ganjaCount != null;
+        if (!hasWarehouseCounts) {
+            return new WarehouseStockDistribution(stockQuantity, 0, stockQuantity);
+        }
+
+        int normalizedBaku = bakuCount == null ? 0 : bakuCount;
+        int normalizedGanja = ganjaCount == null ? 0 : ganjaCount;
+        int total = normalizedBaku + normalizedGanja;
+        return new WarehouseStockDistribution(normalizedBaku, normalizedGanja, total);
+    }
+
     private String normalizeHeader(String header) {
         if (header == null) {
             return "";
         }
 
+        return getString(header);
+    }
+
+    public static String getString(String header) {
         String normalized = header
                 .toLowerCase(Locale.ROOT)
                 // азербайджанские буквы → латиница
@@ -607,6 +757,44 @@ public class ProductService {
         return trimmed.isBlank() ? null : trimmed;
     }
 
+    private String normalizeCatalogCategory(String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null) {
+            return null;
+        }
+        return normalized.replaceAll("\\s+", " ");
+    }
+
+    private int normalizeStockQuantity(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException("Stock quantity must be non-negative.");
+        }
+        return value;
+    }
+
+    private Integer normalizeWarehouseCount(Integer value, String fieldName) {
+        if (value == null) {
+            return null;
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must be non-negative.");
+        }
+        return value;
+    }
+
+    private Integer normalizeDeliveryDays(Integer value) {
+        if (value == null) {
+            return null;
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException("Delivery days must be non-negative.");
+        }
+        return value;
+    }
+
     private String normalizeImageUrl(String value) {
         String trimmed = normalizeNullable(value);
         if (trimmed == null) {
@@ -623,6 +811,17 @@ public class ProductService {
             return "";
         }
         return sku.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private List<Product> getCatalogProducts() {
+        if (isCatalogActiveFilterEnabled()) {
+            return productRepository.findAllByActiveTrueOrderByCreatedAtDesc();
+        }
+        return productRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    private boolean isCatalogActiveFilterEnabled() {
+        return productRepository.existsByActiveTrue();
     }
 
     private void addRowError(List<String> errors, String message) {
@@ -644,19 +843,32 @@ public class ProductService {
             String brand,
             boolean active,
             String slug,
-            String model
+            String model,
+            Integer bakuCount,
+            boolean bakuCountUnknown,
+            Integer ganjaCount,
+            boolean ganjaCountUnknown,
+            Integer deliveryDays
     ) {
     }
 
     private record StockCell(
             int quantity,
-            StockState stockState
+            StockState stockState,
+            boolean unknownQuantity
     ) {
     }
 
     private record StockResolution(
             int quantity,
             StockState stockState
+    ) {
+    }
+
+    private record WarehouseStockDistribution(
+            int bakuCount,
+            int ganjaCount,
+            int totalQuantity
     ) {
     }
 }

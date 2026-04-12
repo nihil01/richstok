@@ -9,7 +9,7 @@ import java.time.Instant;
 
 public final class CurrencyRateService {
 
-    private static final String API_KEY = "xxx";
+    private static final String API_KEY = "68a5e50543f4fb78d18ffd28";
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     private static CurrencyDTO currencyDto = null;

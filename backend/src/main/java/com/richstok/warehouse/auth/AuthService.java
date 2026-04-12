@@ -1,13 +1,12 @@
 package com.richstok.warehouse.auth;
 
 import com.richstok.warehouse.auth.dto.AuthUserResponse;
+import com.richstok.warehouse.auth.dto.ChangePasswordRequest;
 import com.richstok.warehouse.auth.dto.LoginRequest;
-import com.richstok.warehouse.auth.dto.RegisterRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -16,27 +15,9 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final AppUserRepository appUserRepository;
-    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-
-    public AuthResult register(RegisterRequest request) {
-        String email = normalizeEmail(request.email());
-        if (appUserRepository.existsByEmailIgnoreCase(email)) {
-            throw new IllegalArgumentException("User with this email already exists.");
-        }
-
-        AppUser appUser = new AppUser();
-        appUser.setEmail(email);
-        appUser.setFullName(request.fullName().trim());
-        appUser.setPasswordHash(passwordEncoder.encode(request.password()));
-        appUser.setRole(UserRole.USER);
-        appUser.setActive(true);
-
-        AppUser saved = appUserRepository.save(appUser);
-        String token = jwtService.generateToken(new AppUserPrincipal(saved));
-        return new AuthResult(toResponse(saved), token);
-    }
+    private final PasswordEncoder passwordEncoder;
 
     public AuthResult login(LoginRequest request) {
         String email = normalizeEmail(request.email());
@@ -47,15 +28,21 @@ public class AuthService {
         return new AuthResult(toResponse(appUser), token);
     }
 
-    public AuthUserResponse getCurrentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new BadCredentialsException("Unauthorized.");
-        }
-        Object principal = authentication.getPrincipal();
-        if (!(principal instanceof AppUserPrincipal(AppUser user))) {
-            throw new BadCredentialsException("Unauthorized.");
-        }
+    public AuthUserResponse getCurrentUser(AppUser user) {
         return toResponse(user);
+    }
+
+    public void changePassword(AppUser user, ChangePasswordRequest request) {
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Current password is invalid.");
+        }
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("New password must be different from the current one.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        appUserRepository.save(user);
     }
 
     private AuthUserResponse toResponse(AppUser appUser) {
