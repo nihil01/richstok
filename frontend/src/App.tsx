@@ -1,6 +1,4 @@
 import {fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
-import AuthModal from "@/components/AuthModal";
-import HeaderCurrencyTicker from "@/components/HeaderCurrencyTicker";
 import SiteFooter from "@/components/SiteFooter";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
@@ -9,7 +7,9 @@ import {WishlistProvider, useWishlist} from "@/context/WishlistContext";
 import AccountPage from "@/pages/AccountPage";
 import AdminPage from "@/pages/AdminPage";
 import CartPage from "@/pages/CartPage";
+import LoginPage from "@/pages/LoginPage";
 import ProductDetailsPage from "@/pages/ProductDetailsPage";
+import PublicGatewayPage from "@/pages/PublicGatewayPage";
 import StorePage from "@/pages/StorePage";
 import WishlistPage from "@/pages/WishlistPage";
 import type {AuthUser} from "@/types/auth";
@@ -20,9 +20,9 @@ import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDis
 import {AnimatePresence, motion} from "framer-motion";
 import {CheckCircle2, Coins, Heart, LayoutDashboard, LogIn, LogOut, Moon, Settings2, ShoppingBag, ShoppingCart, Sparkles, Sun, User} from "lucide-react";
 import type {ReactNode} from "react";
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import type {Location} from "react-router-dom";
-import {Link, Route, Routes, useLocation, useNavigate} from "react-router-dom";
+import {Link, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom";
 
 const labels: Record<
   Language,
@@ -126,11 +126,39 @@ function getInitialTheme(): ThemeMode {
   return currentHour >= 20 || currentHour < 7 ? "dark" : "light";
 }
 
+function isB2BHost() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return window.location.hostname.startsWith("b2b.");
+}
+
+function resolveB2BLoginUrl() {
+  if (typeof window === "undefined") {
+    return "/login";
+  }
+  const {protocol, hostname, port} = window.location;
+  if (hostname.endsWith("richstok.com")) {
+    return `${protocol}//b2b.richstok.com/login`;
+  }
+  const localPort = port ? `:${port}` : "";
+  return `${protocol}//b2b.localhost${localPort}/login`;
+}
+
+function formatHeaderCurrencyRate(value: number) {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+  if (value >= 1) {
+    return value.toFixed(3);
+  }
+  return value.toFixed(4);
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isBooting, setIsBooting] = useState(true);
-  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("richstok-language") as Language) || "az");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialTheme());
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() => resolveDisplayCurrency(localStorage.getItem("richstok-display-currency")));
@@ -138,14 +166,14 @@ export default function App() {
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(() => ({...DEFAULT_DISPLAY_RATES}));
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [cartToast, setCartToast] = useState<{id: number; text: string} | null>(null);
   const [cartPulseId, setCartPulseId] = useState(0);
-  const lastScrollRef = useRef(0);
   const toastIdRef = useRef(0);
   const pendingSectionRef = useRef<string | null>(null);
   const preferencesRef = useRef<HTMLDivElement | null>(null);
+  const b2bMode = useMemo(() => isB2BHost(), []);
+  const b2bLoginUrl = useMemo(() => resolveB2BLoginUrl(), []);
   const ui = labels[language];
   const isAdmin = authUser?.role === "ADMIN";
 
@@ -170,22 +198,11 @@ export default function App() {
   }, [displayCurrency]);
 
   useEffect(() => {
-    const onScroll = () => {
-      const currentScroll = window.scrollY;
-      if (currentScroll <= 24) {
-        setIsHeaderHidden(false);
-      } else if (currentScroll > lastScrollRef.current + 6) {
-        setIsHeaderHidden(true);
-      } else if (currentScroll < lastScrollRef.current - 6) {
-        setIsHeaderHidden(false);
-      }
-      lastScrollRef.current = currentScroll;
-    };
-    window.addEventListener("scroll", onScroll, {passive: true});
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
+    if (!b2bMode) {
+      setAuthChecked(true);
+      setAuthUser(null);
+      return;
+    }
     void (async () => {
       try {
         const user = await fetchCurrentUser();
@@ -196,7 +213,7 @@ export default function App() {
         setAuthChecked(true);
       }
     })();
-  }, []);
+  }, [b2bMode]);
 
   useEffect(() => {
     void (async () => {
@@ -268,14 +285,23 @@ export default function App() {
   }, [cartToast]);
 
   function openAuth() {
-    setAuthModalOpen(true);
+    if (!b2bMode) {
+      const from = `${location.pathname}${location.search}${location.hash}`;
+      navigate("/b2b-access", {state: {from}});
+      return;
+    }
+    if (location.pathname === "/login") {
+      return;
+    }
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    navigate("/login", {state: {from}});
   }
 
   async function handleLogout() {
     await logout();
     setAuthUser(null);
-    if (location.pathname.startsWith("/admin") || location.pathname.startsWith("/account")) {
-      navigate("/");
+    if (b2bMode) {
+      navigate("/login", {replace: true});
     }
   }
 
@@ -297,23 +323,22 @@ export default function App() {
   return (
     <WishlistProvider authUser={authUser}>
       <CartProvider authUser={authUser}>
-      <div className="app-shell relative min-h-screen bg-transparent">
+      <div className="app-shell relative flex min-h-screen flex-col bg-transparent">
       <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
 
       <motion.header
         initial={{y: 0}}
-        animate={{y: isHeaderHidden ? "-100%" : 0}}
+        animate={{y: 0}}
         transition={{duration: 0.25, ease: "easeOut"}}
         className="header-surface sticky top-0 z-[90] border-b backdrop-blur-xl"
       >
-        <HeaderCurrencyTicker language={language} baseCode={currencyBaseCode} rates={currencyRates} />
         <div className="mx-auto flex w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <motion.div
             initial={{opacity: 0, y: -10, scale: 0.98}}
             animate={{opacity: 1, y: 0, scale: 1}}
             transition={{duration: 0.5, delay: 0.18}}
             whileHover={{scale: 1.01}}
-            className="logo-shell relative overflow-hidden rounded-xl border p-1.5 [&_svg]:h-9 [&_svg]:w-auto sm:[&_svg]:h-10"
+            className="logo-shell relative overflow-hidden rounded-xl border p-1.5"
           >
             <RichstokLogo />
           </motion.div>
@@ -375,6 +400,10 @@ export default function App() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="hidden rounded-lg border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.08em] theme-muted lg:block">
+              1 {currencyBaseCode} ≈ USD {formatHeaderCurrencyRate(currencyRates.USD ?? DEFAULT_DISPLAY_RATES.USD)} · EUR {formatHeaderCurrencyRate(currencyRates.EUR ?? DEFAULT_DISPLAY_RATES.EUR)}
             </div>
 
             <div ref={preferencesRef} className="relative z-[130]">
@@ -442,21 +471,28 @@ export default function App() {
                   {ui.signOut}
                 </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={openAuth}
+            ) : b2bMode ? (
+              <Link
+                to="/login"
                 aria-label={ui.authButton}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
               >
                 <LogIn className="h-4 w-4" />
-              </button>
+              </Link>
+            ) : (
+              <a
+                href={b2bLoginUrl}
+                aria-label={ui.authButton}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
+              >
+                <LogIn className="h-4 w-4" />
+              </a>
             )}
           </div>
         </div>
       </motion.header>
 
-      <main className="mx-auto w-full max-w-[1360px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+      <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <CartAwareRoutes
           location={location}
           locationKey={location.pathname}
@@ -472,11 +508,14 @@ export default function App() {
           toStore={ui.toStore}
           onCartAdded={notifyAddedToCart}
           onRequireAuth={openAuth}
+          onAuthenticated={setAuthUser}
+          onLogout={handleLogout}
+          b2bMode={b2bMode}
+          b2bLoginUrl={b2bLoginUrl}
         />
       </main>
 
       <SiteFooter language={language} />
-      <AuthModal language={language} open={authModalOpen} onClose={() => setAuthModalOpen(false)} onAuthenticated={setAuthUser} />
       <AnimatePresence>
         {cartToast && (
           <motion.div
@@ -586,6 +625,10 @@ type CartAwareRoutesProps = {
   toStore: string;
   onCartAdded: () => void;
   onRequireAuth: () => void;
+  onAuthenticated: (user: AuthUser) => void;
+  onLogout: () => Promise<void>;
+  b2bMode: boolean;
+  b2bLoginUrl: string;
 };
 
 function CartAwareRoutes({
@@ -602,7 +645,11 @@ function CartAwareRoutes({
   authOnlyBody,
   toStore,
   onCartAdded,
-  onRequireAuth
+  onRequireAuth,
+  onAuthenticated,
+  onLogout,
+  b2bMode,
+  b2bLoginUrl
 }: CartAwareRoutesProps) {
   const {addToCart} = useCart();
   const {isWishlisted, toggleWishlist} = useWishlist();
@@ -628,27 +675,54 @@ function CartAwareRoutes({
     <AnimatePresence mode="wait">
       <Routes location={location} key={locationKey}>
         <Route
+          path="/b2b-access"
+          element={<PublicGatewayPage language={language} b2bLoginUrl={b2bLoginUrl} />}
+        />
+        <Route
+          path="/login"
+          element={
+            b2bMode ? (
+              <LoginPage
+                language={language}
+                authUser={authUser}
+                onAuthenticated={onAuthenticated}
+                onLogout={onLogout}
+              />
+            ) : (
+              <Navigate to="/b2b-access" replace />
+            )
+          }
+        />
+        <Route
           path="/"
           element={
-            <StorePage
-              language={language}
-              displayCurrency={displayCurrency}
-              currencyRates={currencyRates}
-              onAddToCart={(product) => void handleAddToCart(product)}
-            />
+            b2bMode && !authUser ? (
+              <Navigate to="/login" replace state={{from: "/"}} />
+            ) : (
+              <StorePage
+                language={language}
+                displayCurrency={displayCurrency}
+                currencyRates={currencyRates}
+                onAddToCart={(product) => void handleAddToCart(product)}
+              />
+            )
           }
         />
         <Route
           path="/products/:id"
           element={
-            <ProductDetailsPage
-              language={language}
-              displayCurrency={displayCurrency}
-              currencyRates={currencyRates}
-              onAddToCart={(product) => void handleAddToCart(product)}
-              isWishlisted={(productId) => Boolean(authUser) && isWishlisted(productId)}
-              onToggleWishlist={handleToggleWishlist}
-            />
+            b2bMode && !authUser ? (
+              <Navigate to="/login" replace state={{from: location.pathname}} />
+            ) : (
+              <ProductDetailsPage
+                language={language}
+                displayCurrency={displayCurrency}
+                currencyRates={currencyRates}
+                onAddToCart={(product) => void handleAddToCart(product)}
+                isWishlisted={(productId) => Boolean(authUser) && isWishlisted(productId)}
+                onToggleWishlist={handleToggleWishlist}
+              />
+            )
           }
         />
         <Route
@@ -661,8 +735,10 @@ function CartAwareRoutes({
                 currencyRates={currencyRates}
                 onAddToCart={(product) => void handleAddToCart(product)}
               />
+            ) : b2bMode ? (
+              <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
             )
           }
         />
@@ -676,8 +752,10 @@ function CartAwareRoutes({
                 currencyRates={currencyRates}
                 authUser={authUser}
               />
+            ) : b2bMode ? (
+              <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
             )
           }
         />
@@ -686,8 +764,10 @@ function CartAwareRoutes({
           element={
             authUser ? (
               <AccountPage language={language} user={authUser} />
+            ) : b2bMode ? (
+              <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <GuardCard title={authOnlyTitle} description={authOnlyBody} buttonText={toStore} />
+              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
             )
           }
         />
@@ -696,8 +776,10 @@ function CartAwareRoutes({
           element={
             authUser && isAdmin ? (
               <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
+            ) : b2bMode ? (
+              <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <GuardCard title={adminOnlyTitle} description={adminOnlyBody} buttonText={toStore} />
+              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
             )
           }
         />

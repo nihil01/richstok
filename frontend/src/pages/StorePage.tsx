@@ -327,12 +327,17 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
         category: selectedCategory || undefined,
         query: catalogQuery || undefined
       });
-      setProducts(data.content);
-      setCurrentPage(data.page);
-      setTotalPages(Math.max(1, data.totalPages || 1));
-      setTotalElements(data.totalElements);
+      const safeProducts = Array.isArray(data?.content) ? data.content : [];
+      const safePage = Number.isFinite(data?.page) ? data.page : page;
+      const safeTotalPages = Number.isFinite(data?.totalPages) ? Math.max(1, data.totalPages) : 1;
+      const safeTotalElements = Number.isFinite(data?.totalElements) ? data.totalElements : safeProducts.length;
+
+      setProducts(safeProducts);
+      setCurrentPage(safePage);
+      setTotalPages(safeTotalPages);
+      setTotalElements(safeTotalElements);
       if (!selectedCategory && !catalogQuery.trim()) {
-        setOverallTotalElements(data.totalElements);
+        setOverallTotalElements(safeTotalElements);
       }
       setHasError(false);
     } catch {

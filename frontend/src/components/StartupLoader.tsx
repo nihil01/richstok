@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Car, Wrench, Sparkles } from "lucide-react";
 import type { Language } from "@/types/ui";
+import RichstokLogo from "@/components/logo/RichstokLogo";
 
 type StartupLoaderProps = {
   language: Language;
@@ -43,6 +44,9 @@ export default function StartupLoader({ language }: StartupLoaderProps) {
 
         <div className="relative w-[min(92vw,620px)] space-y-6">
           <div className="text-center">
+            <div className="logo-shell mx-auto mb-3 inline-flex rounded-xl border p-1.5">
+              <RichstokLogo className="h-10 sm:h-11" />
+            </div>
             <motion.p
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}

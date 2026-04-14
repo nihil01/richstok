@@ -1,4 +1,5 @@
 import {login} from "@/api/client";
+import RichstokLogo from "@/components/logo/RichstokLogo";
 import type {AuthUser} from "@/types/auth";
 import type {Language} from "@/types/ui";
 import {AnimatePresence, motion} from "framer-motion";
@@ -99,6 +100,9 @@ export default function AuthModal({language, open, onClose, onAuthenticated}: Au
 
             <div className="relative mb-5 flex items-start justify-between gap-3">
               <div>
+                <div className="logo-shell mb-3 inline-flex rounded-lg border p-1">
+                  <RichstokLogo className="h-9 sm:h-9" />
+                </div>
                 <h2 className="theme-heading text-2xl font-semibold">{ui.title}</h2>
                 <p className="theme-text mt-1 text-sm">{ui.subtitle}</p>
               </div>

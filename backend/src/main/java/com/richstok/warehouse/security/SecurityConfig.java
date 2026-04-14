@@ -46,6 +46,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(
                         "/",
+                        "/login",
+                        "/b2b-access",
                         "/index.html",
                         "/favicon.ico",
                         "/assets/**",
@@ -54,6 +56,10 @@ public class SecurityConfig {
                         "/admin/**",
                         "/account",
                         "/account/**",
+                        "/cart",
+                        "/cart/**",
+                        "/wishlist",
+                        "/wishlist/**",
                         "/products/**",
                         "/richstok-logo.svg"
                     ).permitAll()

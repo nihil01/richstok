@@ -20,15 +20,17 @@ import type {
   UserOrderPage
 } from "@/types/order";
 
-const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-const apiBaseUrl = import.meta.env.DEV
-  ? "http://localhost:8080/api/v1"
-  : (configuredApiUrl && configuredApiUrl.length > 0
-      ? configuredApiUrl.replace(/\/+$/, "")
-      : "/api/v1");
-const apiOrigin = apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")
-  ? apiBaseUrl.replace(/\/api\/v1\/?$/, "")
-  : "";
+const configuredApiOriginRaw = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.trim();
+const configuredApiBaseUrlRaw = (
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+  || (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+);
+const configuredApiOrigin = configuredApiOriginRaw ? configuredApiOriginRaw.replace(/\/+$/, "") : "";
+const configuredApiBaseUrl = configuredApiBaseUrlRaw ? configuredApiBaseUrlRaw.replace(/\/+$/, "") : "";
+const apiBaseUrl = configuredApiBaseUrl
+  || (configuredApiOrigin ? `${configuredApiOrigin}/api/v1` : "")
+  || (import.meta.env.DEV ? "http://localhost:8080/api/v1" : "/api/v1");
+const apiAbsoluteOrigin = /^https?:\/\//i.test(apiBaseUrl) ? new URL(apiBaseUrl).origin : "";
 
 const api = axios.create({
   baseURL: apiBaseUrl,
@@ -46,10 +48,27 @@ export async function fetchCatalogProductsPage(params: {
   category?: string;
   query?: string;
 }) {
-  const {data} = await api.get<PageResponse<Product>>("/catalog/products/page", {
+  const {data} = await api.get<PageResponse<Product> | Product[]>("/catalog/products/page", {
     params
   });
-  return data;
+  if (Array.isArray(data)) {
+    return {
+      content: data,
+      page: params.page ?? 0,
+      size: params.size ?? data.length,
+      totalElements: data.length,
+      totalPages: data.length > 0 ? 1 : 0,
+      last: true
+    } satisfies PageResponse<Product>;
+  }
+  return {
+    content: Array.isArray(data.content) ? data.content : [],
+    page: Number.isFinite(data.page) ? data.page : params.page ?? 0,
+    size: Number.isFinite(data.size) ? data.size : params.size ?? 0,
+    totalElements: Number.isFinite(data.totalElements) ? data.totalElements : (Array.isArray(data.content) ? data.content.length : 0),
+    totalPages: Number.isFinite(data.totalPages) ? data.totalPages : 1,
+    last: Boolean(data.last)
+  };
 }
 
 export async function fetchCatalogCategories() {
@@ -76,6 +95,7 @@ export async function fetchAdminProducts() {
 
 export async function fetchBrandImages() {
   const { data } = await api.get<string[]>("/brands_images");
+  const assetsOrigin = configuredApiOrigin || apiAbsoluteOrigin || (typeof window !== "undefined" ? window.location.origin : "");
 
   return data
       .filter((image): image is string => typeof image === "string" && image.trim().length > 0)
@@ -84,7 +104,7 @@ export async function fetchBrandImages() {
           return image;
         }
         const normalizedPath = image.startsWith("/") ? image : `/${image}`;
-        return apiOrigin ? `${apiOrigin}${normalizedPath}` : normalizedPath;
+        return assetsOrigin ? `${assetsOrigin}${normalizedPath}` : normalizedPath;
       });
 }
 
