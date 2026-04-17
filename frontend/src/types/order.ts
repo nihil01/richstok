@@ -1,7 +1,11 @@
 import type {PageResponse} from "@/types/product";
 
-export type OrderStatus = "PENDING" | "PROCESSING" | "SHIPPED" | "COMPLETED" | "CANCELLED" | "RETURNED";
+export type OrderStatus = "PENDING" | "PROCESSING" | "SHIPPED" | "COMPLETED" | "PARTIALLY_RETURNED" | "CANCELLED" | "RETURNED";
 export type OrderStatusFilter = OrderStatus | "ALL";
+export type AdminOrderStatusUpdatePayload = {
+  status: OrderStatus;
+  note?: string;
+};
 
 export type AdminOrderListItem = {
   id: number;
@@ -13,7 +17,6 @@ export type AdminOrderListItem = {
   customerPhone: string;
   city: string;
   country: string;
-  fulfillmentCity: "BAKI" | "GANCA" | null;
   totalAmount: number;
   itemCount: number;
   currencyCode: string;
@@ -32,9 +35,11 @@ export type AdminOrderItem = {
   productModel: string | null;
   unitPrice: number;
   quantity: number;
+  returnedQuantity: number;
   lineTotal: number;
   imageUrl: string | null;
   stockState: string | null;
+  returnReason: string | null;
 };
 
 export type AdminOrderDetails = {
@@ -50,7 +55,6 @@ export type AdminOrderDetails = {
   city: string;
   postalCode: string | null;
   country: string;
-  fulfillmentCity: "BAKI" | "GANCA" | null;
   comment: string | null;
   totalAmount: number;
   itemCount: number;
@@ -78,19 +82,21 @@ export type UserOrderListItem = {
   totalAmount: number;
   itemCount: number;
   currencyCode: string;
-  fulfillmentCity: "BAKI" | "GANCA" | null;
   status: OrderStatus;
   createdAt: string;
 };
 
 export type UserOrderItem = {
+  id: number;
   productId: number | null;
   productName: string;
   productSku: string;
   quantity: number;
+  returnedQuantity: number;
   unitPrice: number;
   lineTotal: number;
   imageUrl: string | null;
+  returnReason: string | null;
 };
 
 export type UserOrderDetails = {
@@ -108,7 +114,6 @@ export type UserOrderDetails = {
   city: string;
   postalCode: string | null;
   country: string;
-  fulfillmentCity: "BAKI" | "GANCA" | null;
   comment: string | null;
   items: UserOrderItem[];
 };

@@ -9,11 +9,15 @@ public record AppProperties(
         Security security,
         Bootstrap bootstrap,
         Brands brands,
-        Mail mail
+        Mail mail,
+        CurrencyRate currency
+
 ) {
     public record Cors(List<String> allowedOrigins) {}
 
     public record Brands(String images) {}
+
+    public record CurrencyRate(String apiKey){}
 
     public record Security(
             String jwtSecret,
@@ -32,6 +36,7 @@ public record AppProperties(
                 String email,
                 String password,
                 String fullName
+
         ) {}
     }
 

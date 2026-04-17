@@ -33,10 +33,6 @@ public final class OrderRecordSpecifications {
                             normalized
                     ),
                     criteriaBuilder.like(
-                            criteriaBuilder.lower(criteriaBuilder.coalesce(root.get("fulfillmentCity").as(String.class), "")),
-                            normalized
-                    ),
-                    criteriaBuilder.like(
                             criteriaBuilder.lower(criteriaBuilder.coalesce(userInfoJoin.get("city").as(String.class), "")),
                             normalized
                     ),

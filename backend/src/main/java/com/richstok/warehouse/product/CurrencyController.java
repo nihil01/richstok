@@ -13,12 +13,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CurrencyController {
 
-    private final AppProperties appProperties;
+    private final CurrencyRateService currencyRateService;
 
     @GetMapping("/currency_rate")
     public CurrencyDTO getBrands() {
 
-        return CurrencyRateService.getRate();
+        return currencyRateService.getRate();
 
     }
 

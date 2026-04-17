@@ -5,7 +5,7 @@ import {ArrowRight, Lock} from "lucide-react";
 
 type PublicGatewayPageProps = {
   language: Language;
-  b2bLoginUrl: string;
+  b4bLoginUrl: string;
 };
 
 const copy: Record<
@@ -21,27 +21,27 @@ const copy: Record<
   az: {
     badge: "RICHSTOK PUBLIC",
     title: "Bu açıq vitrindir",
-    body: "Funksional B2B mağazaya daxil olmaq üçün əvvəlcə sistemə giriş et.",
-    button: "B2B girişə keç",
-    hint: "Lokal test üçün: b2b.localhost:8080/login"
+    body: "Funksional B4B mağazaya daxil olmaq üçün əvvəlcə sistemə giriş et.",
+    button: "B4B girişə keç",
+    hint: "Giriş: b4b.richstok.com/login"
   },
   en: {
     badge: "RICHSTOK PUBLIC",
     title: "This is a public storefront",
-    body: "To open the functional B2B shop, sign in first.",
-    button: "Go to B2B login",
-    hint: "Local test: b2b.localhost:8080/login"
+    body: "To open the functional B4B shop, sign in first.",
+    button: "Go to B4B login",
+    hint: "Login: b4b.richstok.com/login"
   },
   ru: {
     badge: "RICHSTOK PUBLIC",
     title: "Это публичная витрина",
-    body: "Чтобы перейти в рабочий B2B-магазин, сначала авторизуйся.",
-    button: "Перейти к B2B-входу",
-    hint: "Для локали: b2b.localhost:8080/login"
+    body: "Чтобы перейти в рабочий B4B-магазин, сначала авторизуйся.",
+    button: "Перейти к B4B-входу",
+    hint: "Вход: b4b.richstok.com/login"
   }
 };
 
-export default function PublicGatewayPage({language, b2bLoginUrl}: PublicGatewayPageProps) {
+export default function PublicGatewayPage({language, b4bLoginUrl}: PublicGatewayPageProps) {
   const ui = copy[language];
 
   return (
@@ -64,7 +64,7 @@ export default function PublicGatewayPage({language, b2bLoginUrl}: PublicGateway
       <p className="theme-text mx-auto mt-2 max-w-2xl text-sm sm:text-base">{ui.body}</p>
 
       <a
-        href={b2bLoginUrl}
+        href={b4bLoginUrl}
         className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
       >
         <Lock className="h-4 w-4" />

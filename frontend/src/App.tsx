@@ -3,7 +3,6 @@ import SiteFooter from "@/components/SiteFooter";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
 import {CartProvider, useCart} from "@/context/CartContext";
-import {WishlistProvider, useWishlist} from "@/context/WishlistContext";
 import AccountPage from "@/pages/AccountPage";
 import AdminPage from "@/pages/AdminPage";
 import CartPage from "@/pages/CartPage";
@@ -11,18 +10,18 @@ import LoginPage from "@/pages/LoginPage";
 import ProductDetailsPage from "@/pages/ProductDetailsPage";
 import PublicGatewayPage from "@/pages/PublicGatewayPage";
 import StorePage from "@/pages/StorePage";
-import WishlistPage from "@/pages/WishlistPage";
 import type {AuthUser} from "@/types/auth";
 import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language, ThemeMode} from "@/types/ui";
 import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDisplayCurrency} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {CheckCircle2, Coins, Heart, LayoutDashboard, LogIn, LogOut, Moon, Settings2, ShoppingBag, ShoppingCart, Sparkles, Sun, User} from "lucide-react";
+import {CheckCircle2, Coins, LayoutDashboard, LogIn, LogOut, Moon, Settings2, ShoppingBag, ShoppingCart, Sparkles, Sun, User} from "lucide-react";
 import type {ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import type {Location} from "react-router-dom";
 import {Link, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom";
+import {UserProfile} from "@/components/UserProfile";
 
 const labels: Record<
   Language,
@@ -31,7 +30,6 @@ const labels: Record<
     account: string;
     admin: string;
     cart: string;
-    wishlist: string;
     language: string;
     authButton: string;
     signOut: string;
@@ -54,7 +52,6 @@ const labels: Record<
     account: "Kabinet",
     admin: "Admin",
     cart: "Səbət",
-    wishlist: "İstək",
     language: "Dil",
     authButton: "Giriş",
     signOut: "Çıxış",
@@ -76,7 +73,6 @@ const labels: Record<
     account: "Account",
     admin: "Admin",
     cart: "Cart",
-    wishlist: "Wishlist",
     language: "Language",
     authButton: "Login",
     signOut: "Sign out",
@@ -98,7 +94,6 @@ const labels: Record<
     account: "Кабинет",
     admin: "Админ",
     cart: "Корзина",
-    wishlist: "Желаемое",
     language: "Язык",
     authButton: "Вход",
     signOut: "Выход",
@@ -126,23 +121,31 @@ function getInitialTheme(): ThemeMode {
   return currentHour >= 20 || currentHour < 7 ? "dark" : "light";
 }
 
-function isB2BHost() {
+function isLocalHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function isB4BHost() {
   if (typeof window === "undefined") {
     return true;
   }
-  return window.location.hostname.startsWith("b2b.");
+  const hostname = window.location.hostname;
+  return hostname.startsWith("b4b.") || isLocalHost(hostname);
 }
 
-function resolveB2BLoginUrl() {
+function resolveB4BLoginUrl() {
   if (typeof window === "undefined") {
-    return "/login";
+    return "https://b4b.richstok.com/login";
   }
   const {protocol, hostname, port} = window.location;
-  if (hostname.endsWith("richstok.com")) {
-    return `${protocol}//b2b.richstok.com/login`;
+  if (isLocalHost(hostname)) {
+    const resolvedPort = port || "5173";
+    return `${protocol}//${hostname}:${resolvedPort}/login`;
   }
-  const localPort = port ? `:${port}` : "";
-  return `${protocol}//b2b.localhost${localPort}/login`;
+  if (hostname.endsWith("richstok.com")) {
+    return `${protocol}//b4b.richstok.com/login`;
+  }
+  return "https://b4b.richstok.com/login";
 }
 
 function formatHeaderCurrencyRate(value: number) {
@@ -172,8 +175,8 @@ export default function App() {
   const toastIdRef = useRef(0);
   const pendingSectionRef = useRef<string | null>(null);
   const preferencesRef = useRef<HTMLDivElement | null>(null);
-  const b2bMode = useMemo(() => isB2BHost(), []);
-  const b2bLoginUrl = useMemo(() => resolveB2BLoginUrl(), []);
+  const b4bMode = useMemo(() => isB4BHost(), []);
+  const b4bLoginUrl = useMemo(() => resolveB4BLoginUrl(), []);
   const ui = labels[language];
   const isAdmin = authUser?.role === "ADMIN";
 
@@ -198,7 +201,7 @@ export default function App() {
   }, [displayCurrency]);
 
   useEffect(() => {
-    if (!b2bMode) {
+    if (!b4bMode) {
       setAuthChecked(true);
       setAuthUser(null);
       return;
@@ -213,7 +216,7 @@ export default function App() {
         setAuthChecked(true);
       }
     })();
-  }, [b2bMode]);
+  }, [b4bMode]);
 
   useEffect(() => {
     void (async () => {
@@ -285,9 +288,9 @@ export default function App() {
   }, [cartToast]);
 
   function openAuth() {
-    if (!b2bMode) {
+    if (!b4bMode) {
       const from = `${location.pathname}${location.search}${location.hash}`;
-      navigate("/b2b-access", {state: {from}});
+      navigate("/b4b-access", {state: {from}});
       return;
     }
     if (location.pathname === "/login") {
@@ -300,7 +303,7 @@ export default function App() {
   async function handleLogout() {
     await logout();
     setAuthUser(null);
-    if (b2bMode) {
+    if (b4bMode) {
       navigate("/login", {replace: true});
     }
   }
@@ -321,8 +324,7 @@ export default function App() {
   }
 
   return (
-    <WishlistProvider authUser={authUser}>
-      <CartProvider authUser={authUser}>
+    <CartProvider authUser={authUser}>
       <div className="app-shell relative flex min-h-screen flex-col bg-transparent">
       <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
 
@@ -330,59 +332,57 @@ export default function App() {
         initial={{y: 0}}
         animate={{y: 0}}
         transition={{duration: 0.25, ease: "easeOut"}}
-        className="header-surface sticky top-0 z-[90] border-b backdrop-blur-xl"
+        className="header-surface sticky top-0 z-[90] overflow-x-clip border-b backdrop-blur-xl"
       >
-        <div className="mx-auto flex w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex min-w-0 w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <motion.div
             initial={{opacity: 0, y: -10, scale: 0.98}}
             animate={{opacity: 1, y: 0, scale: 1}}
             transition={{duration: 0.5, delay: 0.18}}
             whileHover={{scale: 1.01}}
-            className="logo-shell relative overflow-hidden rounded-xl border p-1.5"
+            className="logo-shell relative shrink-0 overflow-hidden rounded-xl border p-1.5"
           >
             <RichstokLogo />
           </motion.div>
 
-          <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-            <nav className="glass-card flex items-center gap-1 rounded-xl border border-brand-500/20 p-1.5">
-              <NavLink to="/" active={location.pathname === "/"}>
-                <ShoppingBag className="h-4 w-4" />
-                {ui.store}
-              </NavLink>
+          <div className="flex min-w-0 w-full flex-1 flex-wrap items-center justify-end gap-2 sm:w-auto">
+            {authUser && (
+              <nav className="glass-card flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-brand-500/20 p-1.5">
+                {isAdmin ? (
+                  <NavLink to="/admin" active={location.pathname.startsWith("/admin")}>
+                    <LayoutDashboard className="h-4 w-4" />
+                    {ui.admin}
+                  </NavLink>
+                ) : (
+                  <>
+                    <NavLink to="/" active={location.pathname === "/"}>
+                      <ShoppingBag className="h-4 w-4" />
+                      {ui.store}
+                    </NavLink>
 
-              {authUser && (
-                <NavLink to="/account" active={location.pathname.startsWith("/account")}>
-                  <User className="h-4 w-4" />
-                  {ui.account}
-                </NavLink>
-              )}
+                    <NavLink to="/account" active={location.pathname.startsWith("/account")}>
+                      <User className="h-4 w-4" />
+                      {ui.account}
+                    </NavLink>
 
-              <NavLink to="/cart" active={location.pathname.startsWith("/cart")}>
-                <motion.span
-                  key={cartPulseId}
-                  initial={{scale: 1, rotate: 0}}
-                  animate={{scale: [1, 1.22, 1], rotate: [0, -8, 8, 0]}}
-                  transition={{duration: 0.55, ease: "easeInOut"}}
-                  className="inline-flex"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                </motion.span>
-                {ui.cart}
-              </NavLink>
+                    <NavLink to="/cart" active={location.pathname.startsWith("/cart")}>
+                      <motion.span
+                        key={cartPulseId}
+                        initial={{scale: 1, rotate: 0}}
+                        animate={{scale: [1, 1.22, 1], rotate: [0, -8, 8, 0]}}
+                        transition={{duration: 0.55, ease: "easeInOut"}}
+                        className="inline-flex"
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                      </motion.span>
+                      {ui.cart}
+                    </NavLink>
 
-              <NavLink to="/wishlist" active={location.pathname.startsWith("/wishlist")}>
-                <Heart className="h-4 w-4" />
-                {ui.wishlist}
-              </NavLink>
-
-              {isAdmin && (
-                <NavLink to="/admin" active={location.pathname.startsWith("/admin")}>
-                  <LayoutDashboard className="h-4 w-4" />
-                  {ui.admin}
-                </NavLink>
-              )}
-            </nav>
-            <div className="glass-card flex items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1">
+                  </>
+                )}
+              </nav>
+            )}
+            <div className="glass-card flex shrink-0 items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1">
               <Coins className="h-4 w-4 text-brand-200" />
               <label className="sr-only" htmlFor="display-currency-select">
                 {ui.currency}
@@ -400,10 +400,6 @@ export default function App() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="hidden rounded-lg border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.08em] theme-muted lg:block">
-              1 {currencyBaseCode} ≈ USD {formatHeaderCurrencyRate(currencyRates.USD ?? DEFAULT_DISPLAY_RATES.USD)} · EUR {formatHeaderCurrencyRate(currencyRates.EUR ?? DEFAULT_DISPLAY_RATES.EUR)}
             </div>
 
             <div ref={preferencesRef} className="relative z-[130]">
@@ -461,17 +457,12 @@ export default function App() {
             </div>
 
             {!authChecked ? null : authUser ? (
-              <div className="glass-card flex items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1.5">
-                <div className="hidden text-right sm:block">
-                  <p className="theme-heading text-xs font-medium leading-tight">{authUser.fullName}</p>
-                  <p className="text-[11px] uppercase tracking-wide text-brand-200">{authUser.role}</p>
-                </div>
-                <button type="button" onClick={() => void handleLogout()} className="inline-flex items-center gap-1 rounded-md border border-brand-500/35 bg-brand-500/10 px-2.5 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
-                  <LogOut className="h-3.5 w-3.5" />
-                  {ui.signOut}
-                </button>
-              </div>
-            ) : b2bMode ? (
+                <UserProfile
+                    authUser={authUser}
+                    handleLogout={handleLogout}
+                    ui={{ signOut: ui.signOut }}
+                />
+            ) : b4bMode ? (
               <Link
                 to="/login"
                 aria-label={ui.authButton}
@@ -481,7 +472,7 @@ export default function App() {
               </Link>
             ) : (
               <a
-                href={b2bLoginUrl}
+                href={b4bLoginUrl}
                 aria-label={ui.authButton}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
               >
@@ -510,12 +501,12 @@ export default function App() {
           onRequireAuth={openAuth}
           onAuthenticated={setAuthUser}
           onLogout={handleLogout}
-          b2bMode={b2bMode}
-          b2bLoginUrl={b2bLoginUrl}
+          b4bMode={b4bMode}
+          b4bLoginUrl={b4bLoginUrl}
         />
       </main>
 
-      <SiteFooter language={language} />
+      <SiteFooter language={language} baseCode={currencyBaseCode} rates={currencyRates} />
       <AnimatePresence>
         {cartToast && (
           <motion.div
@@ -559,8 +550,7 @@ export default function App() {
         )}
       </AnimatePresence>
       </div>
-      </CartProvider>
-    </WishlistProvider>
+    </CartProvider>
   );
 }
 
@@ -574,7 +564,7 @@ function NavLink({to, active, children}: NavLinkProps) {
     return (
         <Link
             to={to}
-            className={`relative rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`relative shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 active ? "text-white" : "theme-text"
             }`}
         >
@@ -627,8 +617,8 @@ type CartAwareRoutesProps = {
   onRequireAuth: () => void;
   onAuthenticated: (user: AuthUser) => void;
   onLogout: () => Promise<void>;
-  b2bMode: boolean;
-  b2bLoginUrl: string;
+  b4bMode: boolean;
+  b4bLoginUrl: string;
 };
 
 function CartAwareRoutes({
@@ -648,11 +638,10 @@ function CartAwareRoutes({
   onRequireAuth,
   onAuthenticated,
   onLogout,
-  b2bMode,
-  b2bLoginUrl
+  b4bMode,
+  b4bLoginUrl
 }: CartAwareRoutesProps) {
   const {addToCart} = useCart();
-  const {isWishlisted, toggleWishlist} = useWishlist();
 
   async function handleAddToCart(product: Product) {
     if (!authUser) {
@@ -663,41 +652,39 @@ function CartAwareRoutes({
     onCartAdded();
   }
 
-  function handleToggleWishlist(product: Product) {
-    if (!authUser) {
-      onRequireAuth();
-      return;
-    }
-    toggleWishlist(product);
-  }
-
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={locationKey}>
         <Route
-          path="/b2b-access"
-          element={<PublicGatewayPage language={language} b2bLoginUrl={b2bLoginUrl} />}
+          path="/b4b-access"
+          element={<PublicGatewayPage language={language} b4bLoginUrl={b4bLoginUrl} />}
         />
         <Route
           path="/login"
           element={
-            b2bMode ? (
-              <LoginPage
-                language={language}
-                authUser={authUser}
-                onAuthenticated={onAuthenticated}
-                onLogout={onLogout}
-              />
+            b4bMode ? (
+              authUser ? (
+                <Navigate to="/" replace />
+              ) : (
+                <LoginPage
+                  language={language}
+                  authUser={authUser}
+                  onAuthenticated={onAuthenticated}
+                  onLogout={onLogout}
+                />
+              )
             ) : (
-              <Navigate to="/b2b-access" replace />
+              <Navigate to="/b4b-access" replace />
             )
           }
         />
         <Route
           path="/"
           element={
-            b2bMode && !authUser ? (
+            b4bMode && !authUser ? (
               <Navigate to="/login" replace state={{from: "/"}} />
+            ) : authUser && isAdmin ? (
+              <Navigate to="/admin" replace />
             ) : (
               <StorePage
                 language={language}
@@ -711,63 +698,50 @@ function CartAwareRoutes({
         <Route
           path="/products/:id"
           element={
-            b2bMode && !authUser ? (
+            b4bMode && !authUser ? (
               <Navigate to="/login" replace state={{from: location.pathname}} />
+            ) : authUser && isAdmin ? (
+              <Navigate to="/admin" replace />
             ) : (
               <ProductDetailsPage
                 language={language}
                 displayCurrency={displayCurrency}
                 currencyRates={currencyRates}
                 onAddToCart={(product) => void handleAddToCart(product)}
-                isWishlisted={(productId) => Boolean(authUser) && isWishlisted(productId)}
-                onToggleWishlist={handleToggleWishlist}
               />
-            )
-          }
-        />
-        <Route
-          path="/wishlist"
-          element={
-            authUser ? (
-              <WishlistPage
-                language={language}
-                displayCurrency={displayCurrency}
-                currencyRates={currencyRates}
-                onAddToCart={(product) => void handleAddToCart(product)}
-              />
-            ) : b2bMode ? (
-              <Navigate to="/login" replace state={{from: location.pathname}} />
-            ) : (
-              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
             )
           }
         />
         <Route
           path="/cart"
           element={
-            authUser ? (
+            authUser && isAdmin ? (
+              <Navigate to="/admin" replace />
+            ) : authUser ? (
               <CartPage
                 language={language}
                 displayCurrency={displayCurrency}
                 currencyRates={currencyRates}
                 authUser={authUser}
               />
-            ) : b2bMode ? (
+            ) : b4bMode ? (
               <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
+              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
             )
           }
         />
         <Route
           path="/account"
           element={
-            authUser ? (
+            authUser && isAdmin ? (
+              <Navigate to="/admin" replace />
+            ) : authUser ? (
               <AccountPage language={language} user={authUser} />
-            ) : b2bMode ? (
+            ) : b4bMode ? (
               <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
+              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
             )
           }
         />
@@ -776,10 +750,10 @@ function CartAwareRoutes({
           element={
             authUser && isAdmin ? (
               <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
-            ) : b2bMode ? (
+            ) : b4bMode ? (
               <Navigate to="/login" replace state={{from: location.pathname}} />
             ) : (
-              <Navigate to="/b2b-access" replace state={{from: location.pathname}} />
+              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
             )
           }
         />

@@ -34,6 +34,9 @@ public class AppUser {
     @Column(nullable = false, length = 120)
     private String fullName;
 
+    @Column(columnDefinition = "text")
+    private String avatarUrl;
+
     @Column(length = 40)
     private String phone;
 

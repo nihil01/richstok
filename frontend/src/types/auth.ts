@@ -4,6 +4,7 @@ export type AuthUser = {
   id: number;
   email: string;
   fullName: string;
+  avatarUrl?: string | null;
   role: UserRole;
 };
 
@@ -34,6 +35,7 @@ export type AccountProfile = {
   id: number;
   email: string;
   fullName: string;
+  avatarUrl: string | null;
   role: UserRole;
   phone: string | null;
   phoneAlt: string | null;
@@ -46,6 +48,7 @@ export type AccountProfile = {
 
 export type AccountProfilePayload = {
   fullName: string;
+  avatarUrl: string;
   phone: string;
   phoneAlt: string;
   addressLine1: string;

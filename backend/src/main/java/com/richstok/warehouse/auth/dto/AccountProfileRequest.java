@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 
 public record AccountProfileRequest(
         @NotBlank @Size(max = 120) String fullName,
+        @Size(max = 2000000) String avatarUrl,
         @Size(max = 40) String phone,
         @Size(max = 40) String phoneAlt,
         @Size(max = 220) String addressLine1,

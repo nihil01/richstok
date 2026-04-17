@@ -47,6 +47,12 @@ public class OrderItemRecord {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal lineTotal;
 
+    @Column(name = "returned_quantity", nullable = false)
+    private Integer returnedQuantity = 0;
+
+    @Column(name = "return_reason", columnDefinition = "text")
+    private String returnReason;
+
     @Column(nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

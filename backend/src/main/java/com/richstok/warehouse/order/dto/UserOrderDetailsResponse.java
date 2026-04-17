@@ -21,7 +21,6 @@ public record UserOrderDetailsResponse(
         String city,
         String postalCode,
         String country,
-        String fulfillmentCity,
         String comment,
         List<UserOrderItemResponse> items
 ) {

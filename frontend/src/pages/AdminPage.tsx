@@ -23,8 +23,7 @@ const initialForm: ProductPayload = {
   stockState: "IN_STOCK",
   brand: "",
   model: "",
-  bakuCount: 0,
-  ganjaCount: 0,
+  unknownCount: false,
   deliveryDays: 0,
   active: true
 };
@@ -52,8 +51,7 @@ const adminCopy: Record<
       oemNumber: string;
       model: string;
       brand: string;
-      bakuCount: string;
-      ganjaCount: string;
+      unknownCount: string;
       deliveryDays: string;
       price: string;
       stock: string;
@@ -116,8 +114,7 @@ const adminCopy: Record<
       category: "Kateqoriya",
       oemNumber: "OEM nömrəsi",
       brand: "Brend",
-      bakuCount: "Bakı qalığı (BAKI)",
-      ganjaCount: "Gəncə qalığı (GANCA)",
+      unknownCount: "Dəqiq say məlum deyil (var / az var)",
       deliveryDays: "Çatdırılma günləri (GUN)",
       price: "Qiymət",
       stock: "Qalıq",
@@ -196,8 +193,7 @@ const adminCopy: Record<
       category: "Category",
       oemNumber: "OEM number",
       brand: "Brand",
-      bakuCount: "Baku stock (BAKI)",
-      ganjaCount: "Ganja stock (GANCA)",
+      unknownCount: "Exact quantity is unknown (var / az var)",
       deliveryDays: "Delivery days (GUN)",
       price: "Price",
       stock: "Stock",
@@ -276,8 +272,7 @@ const adminCopy: Record<
       category: "Категория",
       oemNumber: "OEM номер",
       brand: "Бренд",
-      bakuCount: "Остаток Баку (BAKI)",
-      ganjaCount: "Остаток Гянджа (GANCA)",
+      unknownCount: "Точное количество неизвестно (var / az var)",
       deliveryDays: "Срок доставки, дней (GUN)",
       price: "Цена",
       stock: "Остаток",
@@ -479,8 +474,7 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
         product.slug,
         product.sku,
         product.category,
-        String(product.bakuCount ?? ""),
-        String(product.ganjaCount ?? ""),
+        product.unknownCount ? "unknown var az var" : "",
         String(product.deliveryDays ?? "")
       ]
         .join(" ")
@@ -588,18 +582,15 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                 <Input label={copy.fields.oemNumber} value={form.oemNumber} onChange={(value) => setForm((prev) => ({...prev, oemNumber: value}))} />
                 <Input label={copy.fields.brand} value={form.brand} onChange={(value) => setForm((prev) => ({...prev, brand: value}))} />
                 <Input label={copy.fields.model} value={form.model} onChange={(value) => setForm((prev) => ({...prev, model: value}))} />
-                <Input
-                  label={copy.fields.bakuCount}
-                  type="number"
-                  value={String(form.bakuCount)}
-                  onChange={(value) => setForm((prev) => ({...prev, bakuCount: Number(value || 0)}))}
-                />
-                <Input
-                  label={copy.fields.ganjaCount}
-                  type="number"
-                  value={String(form.ganjaCount)}
-                  onChange={(value) => setForm((prev) => ({...prev, ganjaCount: Number(value || 0)}))}
-                />
+                <label className="theme-text flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.unknownCount)}
+                    onChange={(event) => setForm((prev) => ({...prev, unknownCount: event.target.checked}))}
+                    className="accent-brand-500"
+                  />
+                  {copy.fields.unknownCount}
+                </label>
                 <Input
                   label={copy.fields.deliveryDays}
                   type="number"
@@ -795,7 +786,7 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                                   slug: {product.slug} · brand code: {product.sku}
                                 </p>
                                 <p className="theme-text mt-1 text-sm">
-                                  {product.category} · {product.oemNumber || "OEM"} · {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)} · {product.stockQuantity} {copy.unitShort} · {copy.stockStateOptions[product.stockState]} · {product.brand || "OEM"} · BAKI: {product.bakuCount ?? 0} · GANCA: {product.ganjaCount ?? 0} · {product.deliveryDays ?? "—"} {copy.daysShort}
+                                  {product.category} · {product.oemNumber || "OEM"} · {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)} · {product.stockQuantity} {copy.unitShort} · {copy.stockStateOptions[product.stockState]} · {product.brand || "OEM"} · {product.deliveryDays ?? "—"} {copy.daysShort} {product.unknownCount ? "· var / az var" : ""}
                                 </p>
                               </div>
                             </div>
@@ -939,18 +930,15 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                   value={String(editForm.stockQuantity)}
                   onChange={(value) => setEditForm((prev) => (prev ? {...prev, stockQuantity: Number(value || 0)} : prev))}
                 />
-                <Input
-                  label={copy.fields.bakuCount}
-                  type="number"
-                  value={String(editForm.bakuCount)}
-                  onChange={(value) => setEditForm((prev) => (prev ? {...prev, bakuCount: Number(value || 0)} : prev))}
-                />
-                <Input
-                  label={copy.fields.ganjaCount}
-                  type="number"
-                  value={String(editForm.ganjaCount)}
-                  onChange={(value) => setEditForm((prev) => (prev ? {...prev, ganjaCount: Number(value || 0)} : prev))}
-                />
+                <label className="theme-text flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editForm.unknownCount)}
+                    onChange={(event) => setEditForm((prev) => (prev ? {...prev, unknownCount: event.target.checked} : prev))}
+                    className="accent-brand-500"
+                  />
+                  {copy.fields.unknownCount}
+                </label>
                 <Input
                   label={copy.fields.deliveryDays}
                   type="number"
@@ -1072,16 +1060,12 @@ function loadImageFromDataUrl(dataUrl: string) {
 }
 
 function prepareProductPayload(payload: ProductPayload): ProductPayload {
-  const bakuCount = Math.max(0, Number.isFinite(payload.bakuCount) ? payload.bakuCount : 0);
-  const ganjaCount = Math.max(0, Number.isFinite(payload.ganjaCount) ? payload.ganjaCount : 0);
-  const hasCityCounts = bakuCount > 0 || ganjaCount > 0;
   const normalizedStock = Math.max(0, Number.isFinite(payload.stockQuantity) ? payload.stockQuantity : 0);
 
   return {
     ...payload,
-    bakuCount: hasCityCounts ? bakuCount : normalizedStock,
-    ganjaCount: hasCityCounts ? ganjaCount : 0,
-    stockQuantity: hasCityCounts ? bakuCount + ganjaCount : normalizedStock
+    stockQuantity: normalizedStock,
+    unknownCount: Boolean(payload.unknownCount)
   };
 }
 
@@ -1099,8 +1083,7 @@ function toEditablePayload(product: Product): ProductPayload {
     stockState: product.stockState,
     brand: product.brand ?? "",
     model: product.model ?? "",
-    bakuCount: product.bakuCount ?? 0,
-    ganjaCount: product.ganjaCount ?? 0,
+    unknownCount: Boolean(product.unknownCount),
     deliveryDays: product.deliveryDays ?? 0,
     active: product.active
   };

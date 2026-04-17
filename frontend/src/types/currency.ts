@@ -1,4 +1,4 @@
-export type DisplayCurrency = "AZN" | "USD" | "EUR" | "GBP" | "RUB";
+export type DisplayCurrency = "AZN" | "USD" | "EUR";
 
 export type CurrencyRateApiResponse = {
   result?: string;

@@ -1,22 +1,18 @@
 import type {DisplayCurrency} from "@/types/currency";
 import type {Language} from "@/types/ui";
 
-export const DISPLAY_CURRENCIES: DisplayCurrency[] = ["AZN", "USD", "EUR", "GBP", "RUB"];
+export const DISPLAY_CURRENCIES: DisplayCurrency[] = ["AZN", "USD", "EUR"];
 
 export const DEFAULT_DISPLAY_RATES: Record<DisplayCurrency, number> = {
   AZN: 1,
   USD: 0.5882,
-  EUR: 0.5093,
-  GBP: 0.4443,
-  RUB: 46.3886
+  EUR: 0.5093
 };
 
 const currencySymbols: Record<DisplayCurrency, string> = {
   AZN: "₼",
   USD: "$",
-  EUR: "€",
-  GBP: "£",
-  RUB: "₽"
+  EUR: "€"
 };
 
 const currencyLocales: Record<Language, string> = {

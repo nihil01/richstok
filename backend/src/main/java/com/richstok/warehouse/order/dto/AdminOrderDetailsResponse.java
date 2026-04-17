@@ -19,7 +19,6 @@ public record AdminOrderDetailsResponse(
         String city,
         String postalCode,
         String country,
-        String fulfillmentCity,
         String comment,
         BigDecimal totalAmount,
         Integer itemCount,

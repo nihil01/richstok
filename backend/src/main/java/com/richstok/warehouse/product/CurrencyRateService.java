@@ -1,22 +1,29 @@
 package com.richstok.warehouse.product;
 
+import com.richstok.warehouse.config.AppProperties;
 import com.richstok.warehouse.product.dto.CurrencyDTO;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Instant;
 
+@Service
+@RequiredArgsConstructor
 public final class CurrencyRateService {
 
-    private static final String API_KEY = "68a5e50543f4fb78d18ffd28";
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
+    private final AppProperties appProperties;
 
     private static CurrencyDTO currencyDto = null;
     private static Instant lastSave = null;
     private static final int refreshRate = 3600 * 24 * 1000;
 
-    public static CurrencyDTO getRate() {
+    public CurrencyDTO getRate() {
+
+        String API_KEY = appProperties.currency().apiKey();
 
         if (currencyDto != null && lastSave != null && Instant.now().isBefore(lastSave.plusMillis(refreshRate))){
             return currencyDto;

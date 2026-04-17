@@ -6,12 +6,15 @@ import {Link} from "react-router-dom";
 
 type SiteFooterProps = {
   language: Language;
+  baseCode: string;
+  rates: Record<string, number>;
 };
 
 const copy: Record<
   Language,
   {
     subtitle: string;
+    rates: string;
     navigation: string;
     contacts: string;
     links: {store: string; account: string; admin: string; cart: string};
@@ -22,6 +25,7 @@ const copy: Record<
 > = {
   az: {
     subtitle: "Avtomobil ehtiyat hissələri satışı",
+    rates: "Valyuta kursu",
     navigation: "Naviqasiya",
     contacts: "Əlaqə",
     links: {store: "Mağaza", account: "Kabinet", admin: "Admin", cart: "Səbət"},
@@ -35,6 +39,7 @@ const copy: Record<
   },
   en: {
     subtitle: "Automotive parts",
+    rates: "Exchange rates",
     navigation: "Navigation",
     contacts: "Contacts",
     links: {store: "Store", account: "Account", admin: "Admin", cart: "Cart"},
@@ -48,6 +53,7 @@ const copy: Record<
   },
   ru: {
     subtitle: "Продажа автозапчастей",
+    rates: "Курсы валют",
     navigation: "Навигация",
     contacts: "Контакты",
     links: {store: "Магазин", account: "Кабинет", admin: "Админ", cart: "Корзина"},
@@ -63,8 +69,16 @@ const copy: Record<
 
 const badgeIcons = [Warehouse, Truck, ShieldCheck];
 
-export default function SiteFooter({language}: SiteFooterProps) {
+export default function SiteFooter({language, baseCode, rates}: SiteFooterProps) {
   const ui = copy[language];
+  const locale = language === "ru" ? "ru-RU" : language === "en" ? "en-GB" : "az-Latn-AZ";
+  const normalizedBaseCode = baseCode?.trim().toUpperCase() || "AZN";
+
+  const rateRows = [
+    {code: normalizedBaseCode, value: 1},
+    {code: "USD", value: resolveRate(rates, "USD")},
+    {code: "EUR", value: resolveRate(rates, "EUR")}
+  ];
 
   return (
     <motion.footer
@@ -102,6 +116,17 @@ export default function SiteFooter({language}: SiteFooterProps) {
               );
             })}
           </div>
+          <div className="mt-4">
+            <p className="theme-muted text-[11px] uppercase tracking-[0.12em]">{ui.rates}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {rateRows.map((row) => (
+                <span key={row.code} className="inline-flex items-center gap-1 rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[11px] text-brand-100">
+                  <span className="font-semibold">{row.code}</span>
+                  <span className="theme-text">{formatRate(row.value, locale)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -135,4 +160,28 @@ export default function SiteFooter({language}: SiteFooterProps) {
       </div>
     </motion.footer>
   );
+}
+
+function resolveRate(rates: Record<string, number>, code: string): number {
+  const value = rates[code];
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (code === "USD") {
+    return 0.5882;
+  }
+  if (code === "EUR") {
+    return 0.5093;
+  }
+  return 1;
+}
+
+function formatRate(value: number, locale: string): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "—";
+  }
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: value >= 1 ? 2 : 4,
+    maximumFractionDigits: value >= 1 ? 3 : 4
+  }).format(value);
 }

@@ -29,7 +29,6 @@ type CheckoutProfileState = {
 };
 
 type RequiredProfileField = "fullName" | "email" | "phone" | "addressLine1" | "city" | "country";
-type FulfillmentCity = "BAKI" | "GANCA";
 
 const requiredProfileFields: RequiredProfileField[] = ["fullName", "email", "phone", "addressLine1", "city", "country"];
 
@@ -57,12 +56,9 @@ const copy: Record<
     quantity: string;
     remove: string;
     subtotal: string;
-    stockInCity: string;
+    availableStock: string;
     customerTitle: string;
     customerSubtitle: string;
-    fulfillmentCityLabel: string;
-    fulfillmentCityHint: string;
-    fulfillmentCityOptions: Record<FulfillmentCity, string>;
     profileLoading: string;
     goToProfile: string;
     profileFields: Record<keyof CheckoutProfileState, string>;
@@ -70,7 +66,7 @@ const copy: Record<
       submit: string;
       loadProfile: string;
       missingPrefix: string;
-      stockCityPrefix: string;
+      stockPrefix: string;
     };
   }
 > = {
@@ -85,15 +81,9 @@ const copy: Record<
     quantity: "Miqdar",
     remove: "Sil",
     subtotal: "Ara cəm",
-    stockInCity: "Seçilmiş şəhərdə qalıq",
+    availableStock: "Mövcud stok",
     customerTitle: "Çatdırılma məlumatları",
     customerSubtitle: "Checkout zamanı məlumatlar profilindən avtomatik götürülür.",
-    fulfillmentCityLabel: "Anbar şəhəri",
-    fulfillmentCityHint: "Sifariş üçün istifadə olunan şəhər stokuna görə rezerv ediləcək.",
-    fulfillmentCityOptions: {
-      BAKI: "Bakı",
-      GANCA: "Gəncə"
-    },
     profileLoading: "Profil məlumatları yüklənir...",
     goToProfile: "Profili tamamla",
     profileFields: {
@@ -110,7 +100,7 @@ const copy: Record<
       submit: "Checkout alınmadı. Yenidən cəhd et.",
       loadProfile: "Profil məlumatlarını yükləmək alınmadı.",
       missingPrefix: "Profildə çatışmayan məcburi sahələr:",
-      stockCityPrefix: "Seçilmiş şəhərdə kifayət qədər stok yoxdur:"
+      stockPrefix: "Kifayət qədər stok yoxdur:"
     }
   },
   en: {
@@ -124,15 +114,9 @@ const copy: Record<
     quantity: "Quantity",
     remove: "Remove",
     subtotal: "Subtotal",
-    stockInCity: "Available in selected city",
+    availableStock: "Available stock",
     customerTitle: "Delivery details",
     customerSubtitle: "Checkout uses your account profile details automatically.",
-    fulfillmentCityLabel: "Warehouse city",
-    fulfillmentCityHint: "Stock reservation and deduction are applied to this city.",
-    fulfillmentCityOptions: {
-      BAKI: "Baki",
-      GANCA: "Gence"
-    },
     profileLoading: "Loading profile details...",
     goToProfile: "Complete profile",
     profileFields: {
@@ -149,7 +133,7 @@ const copy: Record<
       submit: "Checkout failed. Please try again.",
       loadProfile: "Failed to load profile details.",
       missingPrefix: "Missing required profile fields:",
-      stockCityPrefix: "Insufficient stock in selected city:"
+      stockPrefix: "Insufficient stock:"
     }
   },
   ru: {
@@ -163,15 +147,9 @@ const copy: Record<
     quantity: "Количество",
     remove: "Удалить",
     subtotal: "Итого",
-    stockInCity: "Остаток в выбранном городе",
+    availableStock: "Доступный остаток",
     customerTitle: "Данные доставки",
     customerSubtitle: "При оформлении данные автоматически берутся из профиля.",
-    fulfillmentCityLabel: "Город склада",
-    fulfillmentCityHint: "Резерв и списание выполняются по этому городу.",
-    fulfillmentCityOptions: {
-      BAKI: "Баку",
-      GANCA: "Гянджа"
-    },
     profileLoading: "Загрузка данных профиля...",
     goToProfile: "Заполнить профиль",
     profileFields: {
@@ -188,7 +166,7 @@ const copy: Record<
       submit: "Не удалось оформить заказ. Попробуй снова.",
       loadProfile: "Не удалось загрузить данные профиля.",
       missingPrefix: "В профиле не заполнены обязательные поля:",
-      stockCityPrefix: "Недостаточно остатка в выбранном городе:"
+      stockPrefix: "Недостаточно остатка:"
     }
   }
 };
@@ -208,7 +186,6 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
   const ui = copy[language];
   const {items, totalItems, subtotal, loading, setItemQuantity, removeItem, clearCart} = useCart();
   const [profile, setProfile] = useState<CheckoutProfileState>(emptyProfile);
-  const [fulfillmentCity, setFulfillmentCity] = useState<FulfillmentCity>("BAKI");
   const [profileLoading, setProfileLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,7 +211,6 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
           postalCode: data.postalCode ?? "",
           country: data.country ?? ""
         });
-        setFulfillmentCity(resolveFulfillmentCityByAddress(data.city ?? ""));
       } catch {
         setError(ui.errors.loadProfile);
       } finally {
@@ -248,14 +224,14 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
     [profile]
   );
 
-  const cityStockIssues = useMemo(() => {
+  const stockIssues = useMemo(() => {
     return items
       .map((item) => ({
         item,
-        availableInCity: resolveCityStock(item, fulfillmentCity)
+        availableStock: resolveAvailableStock(item)
       }))
-      .filter(({item, availableInCity}) => item.quantity > availableInCity);
-  }, [items, fulfillmentCity]);
+      .filter(({item, availableStock}) => item.quantity > availableStock);
+  }, [items]);
 
   const canCheckout = useMemo(
     () =>
@@ -264,8 +240,8 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
       && !submitting
       && !profileLoading
       && missingRequiredFields.length === 0
-      && cityStockIssues.length === 0,
-    [authUser, items.length, submitting, profileLoading, missingRequiredFields.length, cityStockIssues.length]
+      && stockIssues.length === 0,
+    [authUser, items.length, submitting, profileLoading, missingRequiredFields.length, stockIssues.length]
   );
 
   async function handleCheckout() {
@@ -277,12 +253,12 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
       setError(`${ui.errors.missingPrefix} ${missingLabels}`);
       return;
     }
-    if (cityStockIssues.length > 0) {
-      const details = cityStockIssues
+    if (stockIssues.length > 0) {
+      const details = stockIssues
         .slice(0, 4)
-        .map(({item, availableInCity}) => `${item.name} (${item.quantity}/${availableInCity})`)
+        .map(({item, availableStock}) => `${item.name} (${item.quantity}/${availableStock})`)
         .join(", ");
-      setError(`${ui.errors.stockCityPrefix} ${details}`);
+      setError(`${ui.errors.stockPrefix} ${details}`);
       return;
     }
     if (!canCheckout) {
@@ -293,10 +269,7 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
     setSuccess(null);
     setSubmitting(true);
     try {
-      await checkoutOrder({
-        ...profile,
-        fulfillmentCity
-      });
+      await checkoutOrder(profile);
       setSuccess(ui.invoiceSuccess);
       await clearCart();
     } catch (requestError) {
@@ -352,8 +325,8 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
 
                 <div className="flex items-center gap-2">
                   {(() => {
-                    const availableInCity = resolveCityStock(item, fulfillmentCity);
-                    const increaseDisabled = availableInCity <= item.quantity;
+                    const availableStock = resolveAvailableStock(item);
+                    const increaseDisabled = availableStock <= item.quantity;
                     return (
                       <>
                         <button
@@ -392,11 +365,11 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
 
                 <div className="ml-auto text-right">
                   {(() => {
-                    const availableInCity = resolveCityStock(item, fulfillmentCity);
-                    const insufficient = item.quantity > availableInCity;
+                    const availableStock = resolveAvailableStock(item);
+                    const insufficient = item.quantity > availableStock;
                     return (
                       <p className={`text-xs ${insufficient ? "text-rose-300" : "theme-muted"}`}>
-                        {ui.stockInCity}: {availableInCity}
+                        {ui.availableStock}: {availableStock}
                       </p>
                     );
                   })()}
@@ -421,36 +394,14 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
             {profileLoading ? (
               <p className="theme-muted text-sm">{ui.profileLoading}</p>
             ) : (
-              <>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {profileFieldOrder.map((field) => (
-                    <div key={field} className="input-surface rounded-xl border px-3 py-2">
-                      <p className="theme-muted text-[11px] uppercase tracking-wide">{ui.profileFields[field]}</p>
-                      <p className="theme-heading mt-1 text-sm">{profile[field] || "—"}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 rounded-xl border border-white/12 bg-black/10 p-3">
-                  <label className="block text-sm">
-                    <span className="theme-text">{ui.fulfillmentCityLabel}</span>
-                    <select
-                      value={fulfillmentCity}
-                      onChange={(event) => {
-                        setFulfillmentCity(event.target.value as FulfillmentCity);
-                        setError(null);
-                      }}
-                      className="input-surface mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none transition focus:border-brand-300"
-                    >
-                      {(["BAKI", "GANCA"] as FulfillmentCity[]).map((cityOption) => (
-                        <option key={cityOption} value={cityOption}>
-                          {ui.fulfillmentCityOptions[cityOption]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p className="theme-muted mt-2 text-xs">{ui.fulfillmentCityHint}</p>
-                </div>
-              </>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {profileFieldOrder.map((field) => (
+                  <div key={field} className="input-surface rounded-xl border px-3 py-2">
+                    <p className="theme-muted text-[11px] uppercase tracking-wide">{ui.profileFields[field]}</p>
+                    <p className="theme-heading mt-1 text-sm">{profile[field] || "—"}</p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -468,13 +419,13 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
             </div>
           )}
 
-          {cityStockIssues.length > 0 && (
+          {stockIssues.length > 0 && (
             <div className="mt-3 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
-              <p className="font-medium">{ui.errors.stockCityPrefix}</p>
+              <p className="font-medium">{ui.errors.stockPrefix}</p>
               <p className="mt-1 text-xs">
-                {cityStockIssues
+                {stockIssues
                   .slice(0, 4)
-                  .map(({item, availableInCity}) => `${item.name} (${item.quantity}/${availableInCity})`)
+                  .map(({item, availableStock}) => `${item.name} (${item.quantity}/${availableStock})`)
                   .join(", ")}
               </p>
             </div>
@@ -511,39 +462,9 @@ function getApiErrorMessage(error: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function resolveFulfillmentCityByAddress(city: string): FulfillmentCity {
-  const normalized = normalizeCityValue(city);
-  if (normalized.includes("gence") || normalized.includes("gance") || normalized.includes("ganja") || normalized.includes("ganca")) {
-    return "GANCA";
-  }
-  return "BAKI";
-}
-
-function normalizeCityValue(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/ə/g, "e")
-    .replace(/ı/g, "i")
-    .replace(/ö/g, "o")
-    .replace(/ü/g, "u")
-    .replace(/ç/g, "c")
-    .replace(/ş/g, "s")
-    .replace(/ğ/g, "g")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function resolveCityStock(item: CartItem, city: FulfillmentCity): number {
-  const fallback = Math.max(0, item.availableStock ?? 0);
-  if (city === "GANCA") {
-    if (item.ganjaCountUnknown) {
-      return 0;
-    }
-    return item.ganjaCount == null ? fallback : Math.max(0, item.ganjaCount);
-  }
-  if (item.bakuCountUnknown) {
+function resolveAvailableStock(item: CartItem): number {
+  if (item.unknownCount) {
     return 0;
   }
-  return item.bakuCount == null ? fallback : Math.max(0, item.bakuCount);
+  return Math.max(0, item.availableStock ?? 0);
 }

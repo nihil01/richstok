@@ -6,6 +6,7 @@ public record AccountProfileResponse(
         Long id,
         String email,
         String fullName,
+        String avatarUrl,
         UserRole role,
         String phone,
         String phoneAlt,

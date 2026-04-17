@@ -14,6 +14,7 @@ import type {CartMergeItemPayload, CartResponse, CheckoutPayload, CheckoutRespon
 import type {
   AdminOrderDetails,
   AdminOrderReportPage,
+  AdminOrderStatusUpdatePayload,
   AdminOrderSummary,
   OrderStatusFilter,
   UserOrderDetails,
@@ -25,11 +26,15 @@ const configuredApiBaseUrlRaw = (
   (import.meta.env.VITE_API_URL as string | undefined)?.trim()
   || (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
 );
-const configuredApiOrigin = configuredApiOriginRaw ? configuredApiOriginRaw.replace(/\/+$/, "") : "";
-const configuredApiBaseUrl = configuredApiBaseUrlRaw ? configuredApiBaseUrlRaw.replace(/\/+$/, "") : "";
+const configuredApiOrigin = "http://localhost:8080"
+const configuredApiBaseUrl = "http://localhost:8080/api/v1"
+const isLocalBrowser =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+const defaultApiBaseUrl = isLocalBrowser ? "http://localhost:8080/api/v1" : "https://richstok.com/api/v1";
 const apiBaseUrl = configuredApiBaseUrl
   || (configuredApiOrigin ? `${configuredApiOrigin}/api/v1` : "")
-  || (import.meta.env.DEV ? "http://localhost:8080/api/v1" : "/api/v1");
+  || defaultApiBaseUrl;
 const apiAbsoluteOrigin = /^https?:\/\//i.test(apiBaseUrl) ? new URL(apiBaseUrl).origin : "";
 
 const api = axios.create({
@@ -212,11 +217,12 @@ export async function checkoutOrder(payload: CheckoutPayload) {
   return data;
 }
 
-export async function fetchMyOrders(params: {page?: number; size?: number} = {}) {
+export async function fetchMyOrders(params: {page?: number; size?: number; query?: string} = {}) {
   const {data} = await api.get<UserOrderPage>("/orders/my", {
     params: {
       page: params.page ?? 0,
-      size: params.size ?? 10
+      size: params.size ?? 10,
+      query: params.query && params.query.trim().length > 0 ? params.query.trim() : undefined
     }
   });
   return data;
@@ -224,6 +230,16 @@ export async function fetchMyOrders(params: {page?: number; size?: number} = {})
 
 export async function fetchMyOrderDetails(id: number) {
   const {data} = await api.get<UserOrderDetails>(`/orders/my/${id}`);
+  return data;
+}
+
+export async function requestOrderReturn(id: number) {
+  const {data} = await api.post<UserOrderDetails>(`/orders/my/${id}/return`);
+  return data;
+}
+
+export async function requestOrderItemReturn(orderId: number, itemId: number, payload: {quantity: number; reason?: string}) {
+  const {data} = await api.post<UserOrderDetails>(`/orders/my/${orderId}/items/${itemId}/return`, payload);
   return data;
 }
 
@@ -263,6 +279,11 @@ export async function fetchAdminOrdersSummary(params: AdminOrderReportParams = {
 
 export async function fetchAdminOrderDetails(id: number) {
   const {data} = await api.get<AdminOrderDetails>(`/admin/orders/${id}`);
+  return data;
+}
+
+export async function updateAdminOrderStatus(id: number, payload: AdminOrderStatusUpdatePayload) {
+  const {data} = await api.patch<AdminOrderDetails>(`/admin/orders/${id}/status`, payload);
   return data;
 }
 

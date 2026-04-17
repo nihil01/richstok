@@ -11,7 +11,6 @@ public record UserOrderListItemResponse(
         BigDecimal totalAmount,
         Integer itemCount,
         String currencyCode,
-        String fulfillmentCity,
         OrderStatus status,
         OffsetDateTime createdAt
 ) {

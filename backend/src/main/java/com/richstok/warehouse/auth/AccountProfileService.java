@@ -23,6 +23,7 @@ public class AccountProfileService {
     @Transactional
     public AccountProfileResponse updateProfile(AppUser user, AccountProfileRequest request) {
         user.setFullName(request.fullName().trim());
+        user.setAvatarUrl(normalizeAvatar(request.avatarUrl()));
         AppUser savedUser = appUserRepository.save(user);
 
         UserInfo userInfo = userInfoRepository.findByUserId(user.getId())
@@ -56,6 +57,7 @@ public class AccountProfileService {
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),
+                user.getAvatarUrl(),
                 user.getRole(),
                 phone,
                 phoneAlt,
@@ -73,5 +75,22 @@ public class AccountProfileService {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private String normalizeAvatar(String avatarUrl) {
+        if (avatarUrl == null) {
+            return null;
+        }
+        String trimmed = avatarUrl.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+        if (trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
+        if (trimmed.startsWith("https://") || trimmed.startsWith("http://")) {
+            return trimmed;
+        }
+        throw new IllegalArgumentException("Avatar must be a valid image data URI or http(s) URL.");
     }
 }

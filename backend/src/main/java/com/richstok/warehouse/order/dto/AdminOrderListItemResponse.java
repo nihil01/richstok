@@ -15,7 +15,6 @@ public record AdminOrderListItemResponse(
         String customerPhone,
         String city,
         String country,
-        String fulfillmentCity,
         BigDecimal totalAmount,
         Integer itemCount,
         String currencyCode,

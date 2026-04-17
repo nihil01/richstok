@@ -1,5 +1,5 @@
 import {AnimatePresence, motion} from "framer-motion";
-import {Gauge, ImageOff, PackageCheck, ShieldCheck, ShoppingCart} from "lucide-react";
+import {Gauge, ImageOff, PackageCheck, ShoppingCart} from "lucide-react";
 import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language} from "@/types/ui";
@@ -25,12 +25,7 @@ const cardCopy: Record<
     addToCart: string;
     outOfStockAction: string;
     clarifyAction: string;
-    baku: string;
-    ganja: string;
-    delivery: string;
-    days: string;
     stockUnknownHint: string;
-    unknownCount: string;
   }
 > = {
   az: {
@@ -40,12 +35,7 @@ const cardCopy: Record<
     addToCart: "Səbətə at",
     outOfStockAction: "Yoxdur",
     clarifyAction: "Dəqiqləşdir",
-    baku: "Bakı",
-    ganja: "Gəncə",
-    delivery: "Çatdırılma",
-    days: "gün",
-    stockUnknownHint: "Dəqiq say məlum deyil. Dəqiq stok üçün dəstək xidməti ilə əlaqə saxla.",
-    unknownCount: "dəqiqləşdir"
+    stockUnknownHint: "Dəqiq say məlum deyil. Dəqiq stok üçün dəstək xidməti ilə əlaqə saxla."
   },
   en: {
     defaultDescription: "Premium component for stable and safe vehicle performance.",
@@ -54,12 +44,7 @@ const cardCopy: Record<
     addToCart: "Add to cart",
     outOfStockAction: "Out of stock",
     clarifyAction: "Clarify",
-    baku: "Baku",
-    ganja: "Ganja",
-    delivery: "Delivery",
-    days: "days",
-    stockUnknownHint: "Exact quantity is unknown. Please contact support to confirm stock.",
-    unknownCount: "check"
+    stockUnknownHint: "Exact quantity is unknown. Please contact support to confirm stock."
   },
   ru: {
     defaultDescription: "Премиальная деталь для стабильной и безопасной работы авто.",
@@ -68,12 +53,7 @@ const cardCopy: Record<
     addToCart: "В корзину",
     outOfStockAction: "Нет в наличии",
     clarifyAction: "Уточнить",
-    baku: "Баку",
-    ganja: "Гянджа",
-    delivery: "Доставка",
-    days: "дн.",
-    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
-    unknownCount: "уточнить"
+    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки."
   }
 };
 
@@ -81,7 +61,7 @@ export default function ProductCard({product, index = 0, language, displayCurren
   const stockProgress = Math.min(100, Math.round((product.stockQuantity / 120) * 100));
   const copy = cardCopy[language];
   const [addedPulse, setAddedPulse] = useState(false);
-  const hasUnknownStock = product.bakuCountUnknown || product.ganjaCountUnknown;
+  const hasUnknownStock = product.unknownCount;
   const outOfStock = product.stockQuantity <= 0;
   const addDisabled = hasUnknownStock || outOfStock;
   const addButtonLabel = hasUnknownStock
@@ -89,8 +69,6 @@ export default function ProductCard({product, index = 0, language, displayCurren
     : outOfStock
       ? copy.outOfStockAction
       : copy.addToCart;
-  const bakuLabel = product.bakuCountUnknown ? copy.unknownCount : String(product.bakuCount ?? 0);
-  const ganjaLabel = product.ganjaCountUnknown ? copy.unknownCount : String(product.ganjaCount ?? 0);
 
   return (
     <motion.article
@@ -152,9 +130,6 @@ export default function ProductCard({product, index = 0, language, displayCurren
               className="h-full rounded-full bg-gradient-to-r from-brand-400 to-pulse-500"
             />
           </div>
-          <p className="theme-muted mt-2 text-xs">
-            {copy.baku}: {bakuLabel} · {copy.ganja}: {ganjaLabel}
-          </p>
           {hasUnknownStock && (
             <p className="mt-2 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-100">
               {copy.stockUnknownHint}

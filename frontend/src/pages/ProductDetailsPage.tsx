@@ -4,7 +4,7 @@ import type {Product} from "@/types/product";
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {ArrowLeft, Clock3, Heart, ImageOff, PackageCheck, ShieldCheck, ShoppingCart, Tag, Truck} from "lucide-react";
+import {ArrowLeft, Clock3, ImageOff, PackageCheck, Search, ShieldCheck, ShoppingCart, Tag, Truck} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 
@@ -13,8 +13,6 @@ type ProductDetailsPageProps = {
   displayCurrency: DisplayCurrency;
   currencyRates: Record<string, number>;
   onAddToCart?: (product: Product) => void;
-  isWishlisted?: (productId: number) => boolean;
-  onToggleWishlist?: (product: Product) => void;
 };
 
 const detailsCopy: Record<
@@ -29,8 +27,6 @@ const detailsCopy: Record<
     brand: string;
     model: string;
     oem: string;
-    baku: string;
-    ganja: string;
     deliveryDays: string;
     daysShort: string;
     stock: string;
@@ -39,17 +35,12 @@ const detailsCopy: Record<
     createdAt: string;
     updatedAt: string;
     addToCart: string;
+    oemSearch: string;
     outOfStockAction: string;
     clarifyAction: string;
-    favorite: string;
-    favored: string;
     delivery: string;
     quality: string;
     defaultDescription: string;
-    inStock: string;
-    lowStock: string;
-    outOfStock: string;
-    unknownCount: string;
     stockUnknownHint: string;
     yes: string;
     no: string;
@@ -65,8 +56,6 @@ const detailsCopy: Record<
     brand: "Brend",
     model: "Model",
     oem: "OEM nömrəsi",
-    baku: "Bakı",
-    ganja: "Gəncə",
     deliveryDays: "Çatdırılma",
     daysShort: "gün",
     stock: "Qalıq",
@@ -75,17 +64,12 @@ const detailsCopy: Record<
     createdAt: "Yaradılıb",
     updatedAt: "Yenilənib",
     addToCart: "Səbətə at",
+    oemSearch: "OEM ilə axtar",
     outOfStockAction: "Yoxdur",
     clarifyAction: "Dəqiqləşdir",
-    favorite: "Seçilmişlərə əlavə et",
-    favored: "Seçilmişlərdədir",
     delivery: "Anbardan sürətli göndəriş",
     quality: "Orijinal və test edilmiş ehtiyat hissə",
     defaultDescription: "Bu məhsul üçün təsvir əlavə edilməyib.",
-    inStock: "Var",
-    lowStock: "Az var",
-    outOfStock: "Yoxdur",
-    unknownCount: "dəqiqləşdir",
     stockUnknownHint: "Dəqiq stok məlum deyil. Dəqiq say üçün dəstək xidməti ilə əlaqə saxlayın.",
     yes: "Bəli",
     no: "Xeyr"
@@ -100,8 +84,6 @@ const detailsCopy: Record<
     brand: "Brand",
     model: "Model",
     oem: "OEM number",
-    baku: "Baku",
-    ganja: "Ganja",
     deliveryDays: "Delivery",
     daysShort: "days",
     stock: "Stock",
@@ -110,17 +92,12 @@ const detailsCopy: Record<
     createdAt: "Created",
     updatedAt: "Updated",
     addToCart: "Add to cart",
+    oemSearch: "Search by OEM",
     outOfStockAction: "Out of stock",
     clarifyAction: "Clarify",
-    favorite: "Add to wishlist",
-    favored: "In wishlist",
     delivery: "Fast dispatch from warehouse",
     quality: "Genuine and quality-tested auto part",
     defaultDescription: "No description has been added for this product.",
-    inStock: "In stock",
-    lowStock: "Low stock",
-    outOfStock: "Out of stock",
-    unknownCount: "check",
     stockUnknownHint: "Exact stock quantity is unknown. Please contact support to confirm availability.",
     yes: "Yes",
     no: "No"
@@ -135,8 +112,6 @@ const detailsCopy: Record<
     brand: "Бренд",
     model: "Модель",
     oem: "OEM номер",
-    baku: "Баку",
-    ganja: "Гянджа",
     deliveryDays: "Доставка",
     daysShort: "дн.",
     stock: "Остаток",
@@ -145,17 +120,12 @@ const detailsCopy: Record<
     createdAt: "Создан",
     updatedAt: "Обновлен",
     addToCart: "В корзину",
+    oemSearch: "Поиск по OEM",
     outOfStockAction: "Нет в наличии",
     clarifyAction: "Уточнить",
-    favorite: "Добавить в избранное",
-    favored: "В избранном",
     delivery: "Быстрая отгрузка со склада",
     quality: "Оригинальная и проверенная автозапчасть",
     defaultDescription: "Для этого товара пока нет описания.",
-    inStock: "В наличии",
-    lowStock: "Мало",
-    outOfStock: "Нет в наличии",
-    unknownCount: "уточнить",
     stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
     yes: "Да",
     no: "Нет"
@@ -184,9 +154,7 @@ export default function ProductDetailsPage({
   language,
   displayCurrency,
   currencyRates,
-  onAddToCart,
-  isWishlisted,
-  onToggleWishlist
+  onAddToCart
 }: ProductDetailsPageProps) {
   const {id} = useParams();
   const [product, setProduct] = useState<Product | null>(null);
@@ -226,7 +194,7 @@ export default function ProductDetailsPage({
 
   const locale = language === "ru" ? "ru-RU" : language === "en" ? "en-GB" : "az-Latn-AZ";
   const stockState = product ? stockStateLabelMap[language][product.stockState] ?? product.stockState : "—";
-  const hasUnknownStock = product ? (product.bakuCountUnknown || product.ganjaCountUnknown) : false;
+  const hasUnknownStock = product ? product.unknownCount : false;
   const outOfStock = product ? product.stockQuantity <= 0 : true;
   const addDisabled = hasUnknownStock || outOfStock;
   const addButtonLabel = hasUnknownStock
@@ -234,7 +202,8 @@ export default function ProductDetailsPage({
     : outOfStock
       ? copy.outOfStockAction
       : copy.addToCart;
-  const favorite = product ? Boolean(isWishlisted?.(product.id)) : false;
+  const oemSearchQuery = product ? product.oemNumber?.trim() || product.sku.trim() : "";
+  const oemSearchUrl = buildOemImageSearchUrl(oemSearchQuery);
 
   const createdAt = useMemo(() => {
     if (!product?.createdAt) {
@@ -323,8 +292,6 @@ export default function ProductDetailsPage({
               <InfoRow icon={Clock3} label={copy.updatedAt} value={updatedAt} />
               <InfoRow icon={Tag} label={copy.oem} value={product.oemNumber || "—"} />
               <InfoRow icon={Tag} label={copy.model} value={product.model || "—"} />
-              <InfoRow icon={Truck} label={copy.baku} value={resolveWarehouseCountLabel(product.bakuCount, product.bakuCountUnknown, copy.unknownCount)} />
-              <InfoRow icon={Truck} label={copy.ganja} value={resolveWarehouseCountLabel(product.ganjaCount, product.ganjaCountUnknown, copy.unknownCount)} />
               <InfoRow icon={Clock3} label={copy.deliveryDays} value={product.deliveryDays != null ? `${product.deliveryDays} ${copy.daysShort}` : "—"} />
               <InfoRow icon={ShieldCheck} label={copy.active} value={product.active ? copy.yes : copy.no} />
             </div>
@@ -393,18 +360,15 @@ export default function ProductDetailsPage({
                 </motion.span>
                 {addButtonLabel}
               </motion.button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (product) {
-                    onToggleWishlist?.(product);
-                  }
-                }}
-                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${favorite ? "border-brand-500/45 bg-brand-500/12 text-brand-100" : "border-white/15 theme-text"}`}
+              <a
+                href={oemSearchUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-4 py-2.5 text-sm text-brand-100 transition hover:bg-brand-500/18"
               >
-                <Heart className={`h-4 w-4 ${favorite ? "fill-current" : ""}`} />
-                {favorite ? copy.favored : copy.favorite}
-              </button>
+                <Search className="h-4 w-4" />
+                {copy.oemSearch}
+              </a>
             </div>
           </div>
         </div>
@@ -431,9 +395,8 @@ function InfoRow({icon: Icon, label, value}: InfoRowProps) {
   );
 }
 
-function resolveWarehouseCountLabel(count: number | null, unknown: boolean, unknownLabel: string): string {
-  if (unknown) {
-    return unknownLabel;
-  }
-  return String(count ?? 0);
+function buildOemImageSearchUrl(query: string): string {
+  const normalizedQuery = query.trim();
+  const encodedQuery = encodeURIComponent(normalizedQuery);
+  return `https://www.google.com/search?q=${encodedQuery}&tbm=isch`;
 }

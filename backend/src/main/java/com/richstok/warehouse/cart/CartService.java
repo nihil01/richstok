@@ -127,10 +127,7 @@ public class CartService {
                     lineTotal,
                     product.getStockState().name(),
                     product.getStockQuantity(),
-                    product.getBakuCount(),
-                    product.isBakuCountUnknown(),
-                    product.getGanjaCount(),
-                    product.isGanjaCountUnknown(),
+                    product.isUnknownCount(),
                     product.getDeliveryDays()
             ));
         }

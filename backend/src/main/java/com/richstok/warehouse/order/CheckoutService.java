@@ -25,7 +25,6 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,19 +48,13 @@ public class CheckoutService {
         UserInfo userInfo = userInfoRepository.findByUserId(user.getId())
                 .orElse(null);
 
-        FulfillmentCity fulfillmentCity = resolveFulfillmentCity(
-                request.fulfillmentCity(),
-                userInfo != null ? userInfo.getCity() : user.getCity()
-        );
-
-        List<OrderLine> orderLines = resolveOrderLines(user, fulfillmentCity);
+        List<OrderLine> orderLines = resolveOrderLines(user);
         if (orderLines.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty.");
         }
         CustomerProfile customer = resolveCustomerProfile(request, user, userInfo);
         validateCustomer(customer);
         UserInfo savedUserInfo = persistCustomerProfile(user, customer, userInfo);
-        reserveStock(orderLines, fulfillmentCity);
 
         String invoiceNumber = buildInvoiceNumber();
         OffsetDateTime createdAt = OffsetDateTime.now();
@@ -70,8 +63,7 @@ public class CheckoutService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         int itemCount = orderLines.stream().mapToInt(OrderLine::quantity).sum();
 
-        persistCompletedOrder(invoiceNumber, user, savedUserInfo, customer, fulfillmentCity, total, itemCount, orderLines);
-        sendInvoiceEmail(customer.email(), invoiceNumber, createdAt, orderLines, customer, fulfillmentCity, total);
+        persistPendingOrder(invoiceNumber, user, savedUserInfo, customer, total, itemCount, orderLines);
         cartService.clearCartByUserId(user.getId());
 
         return new CheckoutResponse(
@@ -83,12 +75,11 @@ public class CheckoutService {
         );
     }
 
-    private void persistCompletedOrder(
+    private void persistPendingOrder(
             String invoiceNumber,
             AppUser user,
             UserInfo userInfo,
             CustomerProfile customer,
-            FulfillmentCity fulfillmentCity,
             BigDecimal total,
             int itemCount,
             List<OrderLine> lines
@@ -100,9 +91,9 @@ public class CheckoutService {
         orderRecord.setComment(customer.comment());
         orderRecord.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
         orderRecord.setItemCount(itemCount);
-        orderRecord.setFulfillmentCity(fulfillmentCity);
+        orderRecord.setFulfillmentCity(FulfillmentCity.BAKI);
         orderRecord.setCurrencyCode("AZN");
-        orderRecord.setStatus(OrderStatus.COMPLETED);
+        orderRecord.setStatus(OrderStatus.PENDING);
 
         for (OrderLine line : lines) {
             Product product = line.product();
@@ -117,12 +108,12 @@ public class CheckoutService {
         orderRecordRepository.save(orderRecord);
     }
 
-    private List<OrderLine> resolveOrderLines(AppUser user, FulfillmentCity fulfillmentCity) {
+    private List<OrderLine> resolveOrderLines(AppUser user) {
         Map<Long, Integer> rawCart = cartService.getRawCartByUserId(user.getId());
-        return mapOrderLines(rawCart, fulfillmentCity);
+        return mapOrderLines(rawCart);
     }
 
-    private List<OrderLine> mapOrderLines(Map<Long, Integer> itemQuantities, FulfillmentCity fulfillmentCity) {
+    private List<OrderLine> mapOrderLines(Map<Long, Integer> itemQuantities) {
         if (itemQuantities.isEmpty()) {
             return List.of();
         }
@@ -143,18 +134,18 @@ public class CheckoutService {
                 continue;
             }
             int quantity = Math.max(1, entry.getValue());
-            if (isCityStockUnknown(product, fulfillmentCity)) {
+            if (isStockUnknown(product)) {
                 availabilityErrors.add(
                         product.getName()
-                                + " (brand code " + product.getSku() + ", city " + fulfillmentCity.name() + "): exact stock is unknown, please contact support."
+                                + " (brand code " + product.getSku() + "): exact stock is unknown, please contact support."
                 );
                 continue;
             }
-            int availableQuantity = resolveCityAvailableStock(product, fulfillmentCity);
+            int availableQuantity = normalizeStock(product.getStockQuantity());
             if (availableQuantity < quantity) {
                 availabilityErrors.add(
                         product.getName()
-                                + " (brand code " + product.getSku() + ", city " + fulfillmentCity.name() + "): requested "
+                                + " (brand code " + product.getSku() + "): requested "
                                 + quantity + ", available " + availableQuantity + "."
                 );
                 continue;
@@ -170,25 +161,14 @@ public class CheckoutService {
         return lines;
     }
 
-    private void reserveStock(List<OrderLine> lines, FulfillmentCity fulfillmentCity) {
-        Map<Long, Product> productsToUpdate = new HashMap<>();
+    private void reserveStock(List<OrderLine> lines) {
         for (OrderLine line : lines) {
             Product product = line.product();
-            int bakuCount = normalizeStock(product.getBakuCount());
-            int ganjaCount = normalizeStock(product.getGanjaCount());
-
-            if (fulfillmentCity == FulfillmentCity.BAKI) {
-                product.setBakuCount(Math.max(0, bakuCount - line.quantity()));
-            } else {
-                product.setGanjaCount(Math.max(0, ganjaCount - line.quantity()));
-            }
-
-            int updatedQuantity = normalizeStock(product.getBakuCount()) + normalizeStock(product.getGanjaCount());
+            int updatedQuantity = Math.max(0, normalizeStock(product.getStockQuantity()) - line.quantity());
             product.setStockQuantity(updatedQuantity);
             product.setStockState(resolveStockState(updatedQuantity));
-            productsToUpdate.put(product.getId(), product);
         }
-        productRepository.saveAll(productsToUpdate.values());
+        productRepository.saveAll(lines.stream().map(OrderLine::product).toList());
     }
 
     private StockState resolveStockState(int quantity) {
@@ -201,33 +181,8 @@ public class CheckoutService {
         return StockState.IN_STOCK;
     }
 
-    private FulfillmentCity resolveFulfillmentCity(String requestedCity, String profileCity) {
-        FulfillmentCity fromRequest = FulfillmentCity.fromInput(requestedCity);
-        if (fromRequest != null) {
-            return fromRequest;
-        }
-        if (hasText(requestedCity)) {
-            throw new IllegalArgumentException("Invalid fulfillment city. Allowed values: BAKI or GANCA.");
-        }
-        FulfillmentCity fromProfile = FulfillmentCity.fromInput(profileCity);
-        if (fromProfile != null) {
-            return fromProfile;
-        }
-        return FulfillmentCity.BAKI;
-    }
-
-    private int resolveCityAvailableStock(Product product, FulfillmentCity fulfillmentCity) {
-        if (fulfillmentCity == FulfillmentCity.BAKI) {
-            return normalizeStock(product.getBakuCount());
-        }
-        return normalizeStock(product.getGanjaCount());
-    }
-
-    private boolean isCityStockUnknown(Product product, FulfillmentCity fulfillmentCity) {
-        if (fulfillmentCity == FulfillmentCity.BAKI) {
-            return product.isBakuCountUnknown();
-        }
-        return product.isGanjaCountUnknown();
+    private boolean isStockUnknown(Product product) {
+        return product.isUnknownCount();
     }
 
     private int normalizeStock(Integer quantity) {
@@ -306,7 +261,6 @@ public class CheckoutService {
             OffsetDateTime createdAt,
             List<OrderLine> lines,
             CustomerProfile customer,
-            FulfillmentCity fulfillmentCity,
             BigDecimal total
     ) {
         AppProperties.Mail mail = appProperties.mail();
@@ -316,7 +270,7 @@ public class CheckoutService {
 
         String appName = mail != null && hasText(mail.appName()) ? mail.appName().trim() : "RICHSTOK";
         String from = mail != null && hasText(mail.from()) ? mail.from().trim() : "no-reply@richstok.local";
-        String html = buildInvoiceHtml(appName, invoiceNumber, createdAt, lines, customer, fulfillmentCity, total);
+        String html = buildInvoiceHtml(appName, invoiceNumber, createdAt, lines, customer, total);
 
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
@@ -337,7 +291,6 @@ public class CheckoutService {
             OffsetDateTime createdAt,
             List<OrderLine> lines,
             CustomerProfile customer,
-            FulfillmentCity fulfillmentCity,
             BigDecimal total
     ) {
         String rows = lines.stream()
@@ -377,7 +330,6 @@ public class CheckoutService {
                       <p style="margin:0 0 6px;font-size:14px;"><strong>Phone:</strong> %s</p>
                       <p style="margin:0 0 6px;font-size:14px;"><strong>Address:</strong> %s</p>
                       <p style="margin:0 0 0;font-size:14px;"><strong>Location:</strong> %s, %s %s</p>
-                      <p style="margin:6px 0 0;font-size:14px;"><strong>Warehouse city:</strong> %s</p>
                       %s
                     </div>
                     <div style="padding:0 24px 16px;">
@@ -414,7 +366,6 @@ public class CheckoutService {
                 escapeHtml(customer.city()),
                 escapeHtml(customer.country()),
                 escapeHtml(customer.postalCode() == null ? "" : customer.postalCode()),
-                escapeHtml(fulfillmentCity.name()),
                 commentBlock,
                 rows,
                 formatMoney(total)

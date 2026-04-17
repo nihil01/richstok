@@ -14,10 +14,7 @@ public record CartItemResponse(
         BigDecimal lineTotal,
         String stockState,
         Integer availableStock,
-        Integer bakuCount,
-        boolean bakuCountUnknown,
-        Integer ganjaCount,
-        boolean ganjaCountUnknown,
+        boolean unknownCount,
         Integer deliveryDays
 ) {
 }

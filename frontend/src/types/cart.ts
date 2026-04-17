@@ -10,10 +10,7 @@ export type CartItem = {
   lineTotal: number;
   stockState: string;
   availableStock: number;
-  bakuCount: number | null;
-  bakuCountUnknown: boolean;
-  ganjaCount: number | null;
-  ganjaCountUnknown: boolean;
+  unknownCount: boolean;
   deliveryDays: number | null;
 };
 
@@ -42,7 +39,6 @@ export type CheckoutPayload = {
   city?: string;
   postalCode?: string;
   country?: string;
-  fulfillmentCity?: "BAKI" | "GANCA";
   comment?: string;
   items?: CheckoutItemPayload[];
 };

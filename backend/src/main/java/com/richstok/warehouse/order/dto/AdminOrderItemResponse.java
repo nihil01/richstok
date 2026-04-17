@@ -13,8 +13,10 @@ public record AdminOrderItemResponse(
         String productModel,
         BigDecimal unitPrice,
         Integer quantity,
+        Integer returnedQuantity,
         BigDecimal lineTotal,
         String imageUrl,
-        String stockState
+        String stockState,
+        String returnReason
 ) {
 }

@@ -1,4 +1,4 @@
-import {fetchAdminOrderDetails, fetchAdminOrders, fetchAdminOrdersSummary} from "@/api/client";
+import {fetchAdminOrderDetails, fetchAdminOrders, fetchAdminOrdersSummary, updateAdminOrderStatus} from "@/api/client";
 import type {DisplayCurrency} from "@/types/currency";
 import type {AdminOrderDetails, AdminOrderListItem, AdminOrderReportPage, AdminOrderSummary, OrderStatus, OrderStatusFilter} from "@/types/order";
 import type {Language} from "@/types/ui";
@@ -13,7 +13,7 @@ type AdminOrdersReportCardProps = {
   currencyRates: Record<string, number>;
 };
 
-const ORDER_STATUSES: OrderStatusFilter[] = ["ALL", "PENDING", "PROCESSING", "SHIPPED", "COMPLETED", "CANCELLED", "RETURNED"];
+const ORDER_STATUSES: OrderStatusFilter[] = ["ALL", "PENDING", "PROCESSING", "SHIPPED", "COMPLETED", "PARTIALLY_RETURNED", "CANCELLED", "RETURNED"];
 
 const reportCopy: Record<
   Language,
@@ -26,16 +26,19 @@ const reportCopy: Record<
     empty: string;
     loading: string;
     loadError: string;
+    updateError: string;
     detailsError: string;
     details: string;
     customer: string;
     contacts: string;
     delivery: string;
-    warehouseCity: string;
     note: string;
     items: string;
     sku: string;
     qty: string;
+    returned: string;
+    reason: string;
+    actions: {approve: string; reject: string; processing: string};
     pagination: {page: string; prev: string; next: string};
     statusLabel: Record<OrderStatusFilter, string>;
     statusTone: Record<OrderStatus, string>;
@@ -50,16 +53,19 @@ const reportCopy: Record<
     empty: "Bu filtrə görə sifariş tapılmadı.",
     loading: "Yüklənir...",
     loadError: "Sifariş hesabatını yükləmək alınmadı.",
+    updateError: "Sifariş statusunu yeniləmək alınmadı.",
     detailsError: "Sifariş detalları yüklənmədi.",
     details: "Detallar",
     customer: "Müştəri",
     contacts: "Əlaqə",
     delivery: "Çatdırılma",
-    warehouseCity: "Anbar şəhəri",
     note: "Qeyd",
     items: "Məhsullar",
     sku: "Brand code",
     qty: "Say",
+    returned: "Qaytarılıb",
+    reason: "Səbəb",
+    actions: {approve: "Təsdiq et", reject: "İmtina et", processing: "Yenilənir..."},
     pagination: {page: "Səhifə", prev: "Əvvəlki", next: "Növbəti"},
     statusLabel: {
       ALL: "Hamısı",
@@ -67,6 +73,7 @@ const reportCopy: Record<
       PROCESSING: "İcrada",
       SHIPPED: "Yoldadır",
       COMPLETED: "Tamamlandı",
+      PARTIALLY_RETURNED: "Qismən geri qaytarılıb",
       CANCELLED: "Ləğv edildi",
       RETURNED: "Geri qaytarıldı"
     },
@@ -75,6 +82,7 @@ const reportCopy: Record<
       PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
       SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
+      PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
       RETURNED: "bg-purple-500/10 border-purple-400/30 text-purple-200"
     }
@@ -88,16 +96,19 @@ const reportCopy: Record<
     empty: "No orders found for current filters.",
     loading: "Loading...",
     loadError: "Failed to load order reports.",
+    updateError: "Failed to update order status.",
     detailsError: "Failed to load order details.",
     details: "Details",
     customer: "Customer",
     contacts: "Contacts",
     delivery: "Delivery",
-    warehouseCity: "Warehouse city",
     note: "Note",
     items: "Items",
     sku: "Brand code",
     qty: "Qty",
+    returned: "Returned",
+    reason: "Reason",
+    actions: {approve: "Approve", reject: "Reject", processing: "Updating..."},
     pagination: {page: "Page", prev: "Previous", next: "Next"},
     statusLabel: {
       ALL: "All",
@@ -105,6 +116,7 @@ const reportCopy: Record<
       PROCESSING: "Processing",
       SHIPPED: "Shipped",
       COMPLETED: "Completed",
+      PARTIALLY_RETURNED: "Partially returned",
       CANCELLED: "Cancelled",
       RETURNED: "Returned"
     },
@@ -113,6 +125,7 @@ const reportCopy: Record<
       PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
       SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
+      PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
       RETURNED: "bg-purple-500/10 border-purple-400/30 text-purple-200"
     }
@@ -126,16 +139,19 @@ const reportCopy: Record<
     empty: "По выбранным фильтрам заказов нет.",
     loading: "Загрузка...",
     loadError: "Не удалось загрузить отчет по заказам.",
+    updateError: "Не удалось обновить статус заказа.",
     detailsError: "Не удалось загрузить детали заказа.",
     details: "Детали",
     customer: "Клиент",
     contacts: "Контакты",
     delivery: "Доставка",
-    warehouseCity: "Город склада",
     note: "Комментарий",
     items: "Товары",
     sku: "Brand code",
     qty: "Кол-во",
+    returned: "Возвращено",
+    reason: "Причина",
+    actions: {approve: "Принять", reject: "Отклонить", processing: "Обновление..."},
     pagination: {page: "Страница", prev: "Назад", next: "Вперед"},
     statusLabel: {
       ALL: "Все",
@@ -143,6 +159,7 @@ const reportCopy: Record<
       PROCESSING: "В обработке",
       SHIPPED: "Отправлен",
       COMPLETED: "Завершен",
+      PARTIALLY_RETURNED: "Частичный возврат",
       CANCELLED: "Отменен",
       RETURNED: "Возврат"
     },
@@ -151,6 +168,7 @@ const reportCopy: Record<
       PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
       SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
+      PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
       RETURNED: "bg-purple-500/10 border-purple-400/30 text-purple-200"
     }
@@ -171,6 +189,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
 
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -185,43 +204,47 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
   }, [queryInput]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        setLoading(true);
-        const data = await fetchAdminOrders({
-          page,
-          size: 10,
-          query,
-          status,
-          fromDate: fromDate || undefined,
-          toDate: toDate || undefined
-        });
-        setOrdersPage(data);
-        setError(null);
-      } catch {
-        setError(copy.loadError);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void loadOrdersPage();
   }, [copy.loadError, page, query, status, fromDate, toDate]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        setSummaryLoading(true);
-        const data = await fetchAdminOrdersSummary({
-          query,
-          status,
-          fromDate: fromDate || undefined,
-          toDate: toDate || undefined
-        });
-        setSummary(data);
-      } finally {
-        setSummaryLoading(false);
-      }
-    })();
+    void loadSummary();
   }, [query, status, fromDate, toDate]);
+
+  async function loadOrdersPage() {
+    try {
+      setLoading(true);
+      const data = await fetchAdminOrders({
+        page,
+        size: 10,
+        query,
+        status,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined
+      });
+      setOrdersPage(data);
+      setError(null);
+    } catch {
+      setError(copy.loadError);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadSummary() {
+    try {
+      setSummaryLoading(true);
+      const data = await fetchAdminOrdersSummary({
+        query,
+        status,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined
+      });
+      setSummary(data);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   async function openOrderDetails(order: AdminOrderListItem) {
     try {
@@ -233,6 +256,22 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
       setDetailsError(copy.detailsError);
     } finally {
       setDetailsLoading(false);
+    }
+  }
+
+  async function handleOrderStatusUpdate(orderId: number, nextStatus: OrderStatus) {
+    try {
+      setStatusUpdatingId(orderId);
+      setError(null);
+      const updated = await updateAdminOrderStatus(orderId, {status: nextStatus});
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(updated);
+      }
+      await Promise.all([loadOrdersPage(), loadSummary()]);
+    } catch {
+      setError(copy.updateError);
+    } finally {
+      setStatusUpdatingId(null);
     }
   }
 
@@ -373,6 +412,26 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${copy.statusTone[order.status]}`}>
                       {copy.statusLabel[order.status]}
                     </span>
+                    {order.status === "PENDING" && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === order.id}
+                          onClick={() => void handleOrderStatusUpdate(order.id, "PROCESSING")}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === order.id ? copy.actions.processing : copy.actions.approve}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === order.id}
+                          onClick={() => void handleOrderStatusUpdate(order.id, "CANCELLED")}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-400/35 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === order.id ? copy.actions.processing : copy.actions.reject}
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => void openOrderDetails(order)}
@@ -386,7 +445,6 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                 <div className="theme-text mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   <span>ID: {order.userId}</span>
                   <span>{order.city}, {order.country}</span>
-                  <span>{copy.warehouseCity}: {formatFulfillmentCity(order.fulfillmentCity, language)}</span>
                   <span>{order.itemCount} pcs</span>
                   <span className="font-medium">{formatConvertedPrice(order.totalAmount, displayCurrency, currencyRates, language)}</span>
                 </div>
@@ -472,6 +530,26 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${copy.statusTone[selectedOrder.status]}`}>
                       {copy.statusLabel[selectedOrder.status]}
                     </span>
+                    {selectedOrder.status === "PENDING" && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === selectedOrder.id}
+                          onClick={() => void handleOrderStatusUpdate(selectedOrder.id, "PROCESSING")}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === selectedOrder.id ? copy.actions.processing : copy.actions.approve}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === selectedOrder.id}
+                          onClick={() => void handleOrderStatusUpdate(selectedOrder.id, "CANCELLED")}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-400/35 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === selectedOrder.id ? copy.actions.processing : copy.actions.reject}
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -483,8 +561,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                         selectedOrder.addressLine1,
                         selectedOrder.addressLine2 || "-",
                         `${selectedOrder.city}, ${selectedOrder.country}`,
-                        selectedOrder.postalCode || "-",
-                        `${copy.warehouseCity}: ${formatFulfillmentCity(selectedOrder.fulfillmentCity, language)}`
+                        selectedOrder.postalCode || "-"
                       ]}
                     />
                     <InfoCard title={copy.note} lines={[selectedOrder.comment || "-"]} />
@@ -499,6 +576,12 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                             <div>
                               <p className="theme-heading text-sm font-medium">{item.productName}</p>
                               <p className="theme-muted text-xs">{copy.sku}: {item.productSku}</p>
+                              {item.returnedQuantity > 0 && (
+                                <p className="theme-muted text-xs">{copy.returned}: {item.returnedQuantity}</p>
+                              )}
+                              {item.returnReason && (
+                                <p className="theme-muted whitespace-pre-line text-xs">{copy.reason}: {item.returnReason}</p>
+                              )}
                             </div>
                             <p className="text-sm font-medium text-brand-100">
                               {copy.qty}: {item.quantity} · {formatConvertedPrice(item.lineTotal, displayCurrency, currencyRates, language)}
@@ -544,14 +627,4 @@ function InfoCard({title, lines}: {title: string; lines: string[]}) {
       </div>
     </div>
   );
-}
-
-function formatFulfillmentCity(city: "BAKI" | "GANCA" | null | undefined, language: Language): string {
-  if (city === "GANCA") {
-    return language === "ru" ? "Гянджа" : language === "az" ? "Gəncə" : "Gence";
-  }
-  if (city === "BAKI") {
-    return language === "ru" ? "Баку" : language === "az" ? "Bakı" : "Baki";
-  }
-  return "—";
 }

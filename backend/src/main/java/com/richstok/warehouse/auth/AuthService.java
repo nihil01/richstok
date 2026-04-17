@@ -50,6 +50,7 @@ public class AuthService {
                 appUser.getId(),
                 appUser.getEmail(),
                 appUser.getFullName(),
+                appUser.getAvatarUrl(),
                 appUser.getRole()
         );
     }

@@ -15,7 +15,6 @@ public record CheckoutRequest(
         @Size(max = 120) String city,
         @Size(max = 40) String postalCode,
         @Size(max = 120) String country,
-        @Size(max = 20) String fulfillmentCity,
         @Size(max = 500) String comment,
         @Valid List<CheckoutItemRequest> items
 ) {

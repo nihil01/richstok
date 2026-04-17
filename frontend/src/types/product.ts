@@ -14,10 +14,7 @@ export type Product = {
   stockState: StockState;
   model?: string | null;
   brand: string | null;
-  bakuCount: number | null;
-  bakuCountUnknown: boolean;
-  ganjaCount: number | null;
-  ganjaCountUnknown: boolean;
+  unknownCount: boolean;
   deliveryDays: number | null;
   active: boolean;
   createdAt: string;
@@ -37,10 +34,7 @@ export type ProductPayload = {
   stockState: StockState;
   brand: string;
   model: string;
-  bakuCount: number;
-  bakuCountUnknown?: boolean;
-  ganjaCount: number;
-  ganjaCountUnknown?: boolean;
+  unknownCount?: boolean;
   deliveryDays: number;
   active: boolean;
 };

@@ -57,21 +57,17 @@ public final class ProductSpecifications {
             } catch (NumberFormatException ignored) {
             }
 
-            try {
-                predicates.add(criteriaBuilder.equal(root.get("bakuCount"), Integer.parseInt(normalizedQuery)));
-            } catch (NumberFormatException ignored) {
-            }
-
-            try {
-                predicates.add(criteriaBuilder.equal(root.get("ganjaCount"), Integer.parseInt(normalizedQuery)));
-            } catch (NumberFormatException ignored) {
-            }
-
             String normalizedUpper = normalizedQuery.toUpperCase(Locale.ROOT);
             if ("TRUE".equals(normalizedUpper) || "ACTIVE".equals(normalizedUpper)) {
                 predicates.add(criteriaBuilder.isTrue(root.get("active")));
             } else if ("FALSE".equals(normalizedUpper) || "INACTIVE".equals(normalizedUpper)) {
                 predicates.add(criteriaBuilder.isFalse(root.get("active")));
+            }
+
+            if ("UNKNOWN".equals(normalizedUpper)
+                    || "VAR".equals(normalizedUpper)
+                    || "AZVAR".equals(normalizedUpper)) {
+                predicates.add(criteriaBuilder.isTrue(root.get("unknownCount")));
             }
 
             try {

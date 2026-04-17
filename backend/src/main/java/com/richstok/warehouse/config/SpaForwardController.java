@@ -9,11 +9,10 @@ public class SpaForwardController {
     @GetMapping(value = {
             "/",
             "/login",
-            "/b2b-access",
+            "/b4b-access",
             "/admin",
             "/account",
             "/cart",
-            "/wishlist",
             "/products",
             "/products/{id}"
     })

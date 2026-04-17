@@ -135,7 +135,6 @@ public class AdminOrderReportService {
                 phone,
                 city,
                 country,
-                order.getFulfillmentCity() != null ? order.getFulfillmentCity().name() : null,
                 order.getTotalAmount(),
                 order.getItemCount(),
                 order.getCurrencyCode(),
@@ -165,7 +164,6 @@ public class AdminOrderReportService {
                 userInfo != null ? userInfo.getCity() : user.getCity(),
                 userInfo != null ? userInfo.getPostalCode() : user.getPostalCode(),
                 userInfo != null ? userInfo.getCountry() : user.getCountry(),
-                order.getFulfillmentCity() != null ? order.getFulfillmentCity().name() : null,
                 order.getComment(),
                 order.getTotalAmount(),
                 order.getItemCount(),
@@ -194,9 +192,11 @@ public class AdminOrderReportService {
                 product != null ? product.getModel() : null,
                 item.getUnitPrice(),
                 item.getQuantity(),
+                item.getReturnedQuantity(),
                 item.getLineTotal(),
                 product != null ? product.getImageUrl() : null,
-                stockState
+                stockState,
+                item.getReturnReason()
         );
     }
 

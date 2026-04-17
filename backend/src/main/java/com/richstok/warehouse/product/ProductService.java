@@ -305,10 +305,7 @@ public class ProductService {
                 active,
                 null,
                 model,
-                bakuStock.quantity(),
-                bakuStock.unknownQuantity(),
-                ganjaStock.quantity(),
-                ganjaStock.unknownQuantity(),
+                stockResolution.unknownCount(),
                 deliveryDays
         );
     }
@@ -356,7 +353,8 @@ public class ProductService {
                 || nameColumn == null
                 || leadTimeColumn == null
                 || priceColumn == null
-                || !hasWarehouseColumns(bakiColumn, gancaColumn)) {
+                || bakiColumn == null
+                || gancaColumn == null) {
             throw new IllegalArgumentException("""
                 Excel header does not match required format.
                 Required columns:
@@ -406,16 +404,11 @@ public class ProductService {
         String normalizedSku = normalizeSku(request.sku());
         ensureUniqueSku(normalizedSku, currentProductId);
         int normalizedStockQuantity = normalizeStockQuantity(request.stockQuantity());
-        Integer normalizedBakuCount = normalizeWarehouseCount(request.bakuCount(), "Baku count");
-        Integer normalizedGanjaCount = normalizeWarehouseCount(request.ganjaCount(), "Ganja count");
-        boolean bakuCountUnknown = request.bakuCountUnknown() != null ? request.bakuCountUnknown() : product.isBakuCountUnknown();
-        boolean ganjaCountUnknown = request.ganjaCountUnknown() != null ? request.ganjaCountUnknown() : product.isGanjaCountUnknown();
-        WarehouseStockDistribution stockDistribution =
-                resolveWarehouseDistribution(normalizedStockQuantity, normalizedBakuCount, normalizedGanjaCount);
+        boolean unknownCount = request.unknownCount() != null ? request.unknownCount() : product.isUnknownCount();
         StockState resolvedStockState = resolveManualStockState(
                 request.stockState(),
-                stockDistribution.totalQuantity(),
-                bakuCountUnknown || ganjaCountUnknown
+                normalizedStockQuantity,
+                unknownCount
         );
 
         ParsedRow parsedRow = new ParsedRow(
@@ -426,16 +419,13 @@ public class ProductService {
                 normalizeNullable(request.description()),
                 normalizeImageUrl(request.imageUrl()),
                 request.price(),
-                stockDistribution.totalQuantity(),
+                normalizedStockQuantity,
                 resolvedStockState,
                 normalizeNullable(request.brand()),
                 request.active(),
                 resolveUniqueSlug(request.slug(), request.name(), normalizedSku, currentProductId),
                 request.model(),
-                stockDistribution.bakuCount(),
-                bakuCountUnknown,
-                stockDistribution.ganjaCount(),
-                ganjaCountUnknown,
+                unknownCount,
                 normalizeDeliveryDays(request.deliveryDays())
         );
 
@@ -457,10 +447,7 @@ public class ProductService {
         product.setBrand(parsedRow.brand());
         product.setActive(parsedRow.active());
         product.setModel(parsedRow.model());
-        product.setBakuCount(parsedRow.bakuCount());
-        product.setBakuCountUnknown(parsedRow.bakuCountUnknown());
-        product.setGanjaCount(parsedRow.ganjaCount());
-        product.setGanjaCountUnknown(parsedRow.ganjaCountUnknown());
+        product.setUnknownCount(parsedRow.unknownCount());
         product.setDeliveryDays(parsedRow.deliveryDays());
     }
 
@@ -479,10 +466,7 @@ public class ProductService {
                 product.getStockState().name(),
                 product.getModel(),
                 product.getBrand(),
-                product.getBakuCount(),
-                product.isBakuCountUnknown(),
-                product.getGanjaCount(),
-                product.isGanjaCountUnknown(),
+                product.isUnknownCount(),
                 product.getDeliveryDays(),
                 product.isActive(),
                 product.getCreatedAt(),
@@ -545,19 +529,31 @@ public class ProductService {
         return new BigDecimal(normalized);
     }
 
-    private StockResolution resolveStockQuantity(StockCell bakuStock, StockCell ganjaStock) {
-        int quantity = bakuStock.quantity() + ganjaStock.quantity();
-        if (quantity > 0) {
-            return new StockResolution(quantity, deriveStockStateByQuantity(quantity));
+    private StockResolution resolveStockQuantity(StockCell... stocks) {
+        int quantity = 0;
+        boolean hasUnknownQuantity = false;
+        boolean hasInStockHint = false;
+
+        for (StockCell stock : stocks) {
+            if (stock == null) {
+                continue;
+            }
+            quantity += stock.quantity();
+            hasUnknownQuantity = hasUnknownQuantity || stock.unknownQuantity();
+            hasInStockHint = hasInStockHint || stock.stockState() == StockState.IN_STOCK;
         }
-        boolean hasUnknownQuantity = bakuStock.unknownQuantity() || ganjaStock.unknownQuantity();
+
+        if (quantity > 0) {
+            return new StockResolution(quantity, deriveStockStateByQuantity(quantity), hasUnknownQuantity);
+        }
+
         if (hasUnknownQuantity) {
-            StockState unknownState = bakuStock.stockState() == StockState.IN_STOCK || ganjaStock.stockState() == StockState.IN_STOCK
+            StockState unknownState = hasInStockHint
                     ? StockState.IN_STOCK
                     : StockState.LOW_STOCK;
-            return new StockResolution(0, unknownState);
+            return new StockResolution(0, unknownState, true);
         }
-        return new StockResolution(0, StockState.OUT_OF_STOCK);
+        return new StockResolution(0, StockState.OUT_OF_STOCK, false);
     }
 
     private Integer parseDeliveryDays(String value) {
@@ -691,26 +687,6 @@ public class ProductService {
         return baseDescription;
     }
 
-    private boolean hasWarehouseColumns(Integer bakiColumn, Integer gancaColumn) {
-        return bakiColumn != null && gancaColumn != null;
-    }
-
-    private WarehouseStockDistribution resolveWarehouseDistribution(
-            int stockQuantity,
-            Integer bakuCount,
-            Integer ganjaCount
-    ) {
-        boolean hasWarehouseCounts = bakuCount != null || ganjaCount != null;
-        if (!hasWarehouseCounts) {
-            return new WarehouseStockDistribution(stockQuantity, 0, stockQuantity);
-        }
-
-        int normalizedBaku = bakuCount == null ? 0 : bakuCount;
-        int normalizedGanja = ganjaCount == null ? 0 : ganjaCount;
-        int total = normalizedBaku + normalizedGanja;
-        return new WarehouseStockDistribution(normalizedBaku, normalizedGanja, total);
-    }
-
     private String normalizeHeader(String header) {
         if (header == null) {
             return "";
@@ -775,16 +751,6 @@ public class ProductService {
         return value;
     }
 
-    private Integer normalizeWarehouseCount(Integer value, String fieldName) {
-        if (value == null) {
-            return null;
-        }
-        if (value < 0) {
-            throw new IllegalArgumentException(fieldName + " must be non-negative.");
-        }
-        return value;
-    }
-
     private Integer normalizeDeliveryDays(Integer value) {
         if (value == null) {
             return null;
@@ -844,10 +810,7 @@ public class ProductService {
             boolean active,
             String slug,
             String model,
-            Integer bakuCount,
-            boolean bakuCountUnknown,
-            Integer ganjaCount,
-            boolean ganjaCountUnknown,
+            boolean unknownCount,
             Integer deliveryDays
     ) {
     }
@@ -861,14 +824,8 @@ public class ProductService {
 
     private record StockResolution(
             int quantity,
-            StockState stockState
-    ) {
-    }
-
-    private record WarehouseStockDistribution(
-            int bakuCount,
-            int ganjaCount,
-            int totalQuantity
+            StockState stockState,
+            boolean unknownCount
     ) {
     }
 }

@@ -13,7 +13,7 @@ type CurrencyItem = {
   rate: number;
 };
 
-const tickerCurrencies = ["USD", "EUR", "GBP", "RUB"] as const;
+const tickerCurrencies = ["AZN", "USD", "EUR"] as const;
 
 export default function HeaderCurrencyTicker({language, baseCode, rates}: HeaderCurrencyTickerProps) {
   const items = useMemo(() => {

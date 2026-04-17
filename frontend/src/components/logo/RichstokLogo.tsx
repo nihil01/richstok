@@ -5,7 +5,7 @@ type RichstokLogoProps = {
 };
 
 export default function RichstokLogo({className}: RichstokLogoProps) {
-  const mergedClassName = `h-12 w-auto object-contain sm:h-14 ${className ?? ""}`.trim();
+  const mergedClassName = `h-14 w-auto object-contain sm:h-16 ${className ?? ""}`.trim();
   return (
     <img
       src={richstokLogo}

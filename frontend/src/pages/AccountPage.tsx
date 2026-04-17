@@ -1,23 +1,22 @@
-import {changePassword, fetchAccountProfile, fetchMyOrderDetails, fetchMyOrders, updateAccountProfile} from "@/api/client";
-import {useWishlist} from "@/context/WishlistContext";
+import {changePassword, fetchAccountProfile, fetchMyOrderDetails, fetchMyOrders, requestOrderItemReturn, updateAccountProfile} from "@/api/client";
 import type {AccountProfilePayload, AuthUser} from "@/types/auth";
 import type {UserOrderDetails, UserOrderPage} from "@/types/order";
 import type {Language} from "@/types/ui";
 import {AnimatePresence, motion} from "framer-motion";
-import {ChevronLeft, ChevronRight, Eye, Heart, ListOrdered, LockKeyhole, MapPinHouse, Trash2} from "lucide-react";
-import type {FormEvent} from "react";
+import {Camera, ChevronLeft, ChevronRight, Eye, ListOrdered, LockKeyhole, Search, UserRound} from "lucide-react";
+import type {ChangeEvent, FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
-import {Link} from "react-router-dom";
 
 type AccountPageProps = {
   language: Language;
   user: AuthUser | null;
 };
 
-type AccountTab = "orders" | "wishlist" | "address" | "password";
+type AccountTab = "orders" | "profile" | "password";
 
 const emptyProfile: AccountProfilePayload = {
   fullName: "",
+  avatarUrl: "",
   phone: "",
   phoneAlt: "",
   addressLine1: "",
@@ -26,6 +25,17 @@ const emptyProfile: AccountProfilePayload = {
   postalCode: "",
   country: ""
 };
+
+const editableProfileFields: Array<Exclude<keyof AccountProfilePayload, "avatarUrl">> = [
+  "fullName",
+  "phone",
+  "phoneAlt",
+  "addressLine1",
+  "addressLine2",
+  "city",
+  "postalCode",
+  "country"
+];
 
 const copy: Record<
   Language,
@@ -37,8 +47,11 @@ const copy: Record<
     orders: {
       title: string;
       subtitle: string;
+      searchPlaceholder: string;
       loading: string;
       empty: string;
+      invoice: string;
+      actions: string;
       details: string;
       hideDetails: string;
       detailsLoading: string;
@@ -46,26 +59,24 @@ const copy: Record<
       total: string;
       status: string;
       createdAt: string;
-      warehouseCity: string;
       customer: string;
       phone: string;
       address: string;
       comment: string;
       noComment: string;
+      returnItemAction: string;
+      returningItemAction: string;
+      returnedDone: string;
+      returnQty: string;
+      returnReason: string;
+      returnReasonPlaceholder: string;
+      returnedLabel: string;
       page: string;
       prev: string;
       next: string;
-      errors: {load: string; details: string};
+      errors: {load: string; details: string; returnItem: string};
     };
-    wishlist: {
-      title: string;
-      subtitle: string;
-      empty: string;
-      toProduct: string;
-      remove: string;
-      clear: string;
-    };
-    address: {
+    profile: {
       title: string;
       subtitle: string;
       save: string;
@@ -73,6 +84,10 @@ const copy: Record<
       success: string;
       loadError: string;
       saveError: string;
+      avatarHint: string;
+      avatarPick: string;
+      avatarUploading: string;
+      avatarUploadError: string;
       fields: {
         fullName: string;
         phone: string;
@@ -100,19 +115,21 @@ const copy: Record<
 > = {
   az: {
     title: "İstifadəçi kabineti",
-    subtitle: "Sifarişləri, seçilmişləri və hesab məlumatlarını idarə et.",
+    subtitle: "Sifarişləri və hesab məlumatlarını idarə et.",
     roleLabel: "Rol",
     tabs: {
       orders: "Sifarişlər",
-      wishlist: "Seçilmişlər",
-      address: "Ünvan məlumatları",
+      profile: "Profil",
       password: "Parol"
     },
     orders: {
       title: "Sifarişlərim",
       subtitle: "Son checkout tarixçəsi və sifariş detalları.",
+      searchPlaceholder: "Invoice, brand code, ad və ya OEM ilə axtarış",
       loading: "Sifarişlər yüklənir...",
       empty: "Hələ sifariş yoxdur.",
+      invoice: "Invoice",
+      actions: "Əməliyyat",
       details: "Detalları aç",
       hideDetails: "Detalları gizlət",
       detailsLoading: "Detallar yüklənir...",
@@ -120,29 +137,28 @@ const copy: Record<
       total: "Cəm",
       status: "Status",
       createdAt: "Tarix",
-      warehouseCity: "Anbar şəhəri",
       customer: "Alıcı",
       phone: "Telefon",
       address: "Ünvan",
       comment: "Qeyd",
       noComment: "Qeyd yoxdur",
+      returnItemAction: "Məhsulu geri qaytar",
+      returningItemAction: "Qaytarılır...",
+      returnedDone: "Qaytarma qeydə alındı.",
+      returnQty: "Qaytarılacaq say",
+      returnReason: "Səbəb",
+      returnReasonPlaceholder: "İstəyə bağlı səbəb",
+      returnedLabel: "Qaytarılıb",
       page: "Səhifə",
       prev: "Əvvəlki",
       next: "Növbəti",
       errors: {
         load: "Sifarişləri yükləmək mümkün olmadı.",
-        details: "Sifariş detalları yüklənmədi."
+        details: "Sifariş detalları yüklənmədi.",
+        returnItem: "Məhsulu geri qaytarmaq mümkün olmadı."
       }
     },
-    wishlist: {
-      title: "Seçilmiş məhsullar",
-      subtitle: "Sonra almaq üçün saxladığın məhsullar.",
-      empty: "Seçilmiş məhsul yoxdur.",
-      toProduct: "Məhsula keç",
-      remove: "Sil",
-      clear: "Hamısını təmizlə"
-    },
-    address: {
+    profile: {
       title: "Ünvan və əlaqə məlumatları",
       subtitle: "Checkout zamanı məhz bu məlumatlardan istifadə olunur.",
       save: "Məlumatları yenilə",
@@ -150,6 +166,10 @@ const copy: Record<
       success: "Məlumatlar yeniləndi.",
       loadError: "Profil məlumatlarını yükləmək mümkün olmadı.",
       saveError: "Məlumatlar yenilənmədi.",
+      avatarHint: "Profil şəkli yüklə (max 2MB).",
+      avatarPick: "Avatar seç",
+      avatarUploading: "Yüklənir...",
+      avatarUploadError: "Avatar yüklənmədi.",
       fields: {
         fullName: "Ad Soyad",
         phone: "Telefon",
@@ -176,19 +196,21 @@ const copy: Record<
   },
   en: {
     title: "Account dashboard",
-    subtitle: "Manage your orders, saved items, and account settings.",
+    subtitle: "Manage your orders and account settings.",
     roleLabel: "Role",
     tabs: {
       orders: "Orders",
-      wishlist: "Wishlist",
-      address: "Address details",
+      profile: "Profile",
       password: "Password"
     },
     orders: {
       title: "My orders",
       subtitle: "Your recent checkout history and order details.",
+      searchPlaceholder: "Search by invoice, brand code, product or OEM",
       loading: "Loading orders...",
       empty: "You have no orders yet.",
+      invoice: "Invoice",
+      actions: "Actions",
       details: "Show details",
       hideDetails: "Hide details",
       detailsLoading: "Loading details...",
@@ -196,29 +218,28 @@ const copy: Record<
       total: "Total",
       status: "Status",
       createdAt: "Created",
-      warehouseCity: "Warehouse city",
       customer: "Customer",
       phone: "Phone",
       address: "Address",
       comment: "Comment",
       noComment: "No comment",
+      returnItemAction: "Return item",
+      returningItemAction: "Returning...",
+      returnedDone: "Return has been submitted.",
+      returnQty: "Return quantity",
+      returnReason: "Reason",
+      returnReasonPlaceholder: "Optional reason",
+      returnedLabel: "Returned",
       page: "Page",
       prev: "Previous",
       next: "Next",
       errors: {
         load: "Failed to load orders.",
-        details: "Failed to load order details."
+        details: "Failed to load order details.",
+        returnItem: "Failed to return item."
       }
     },
-    wishlist: {
-      title: "Saved items",
-      subtitle: "Products you saved for later.",
-      empty: "Your wishlist is empty.",
-      toProduct: "Open product",
-      remove: "Remove",
-      clear: "Clear all"
-    },
-    address: {
+    profile: {
       title: "Address and contact details",
       subtitle: "Checkout uses this profile data.",
       save: "Update details",
@@ -226,6 +247,10 @@ const copy: Record<
       success: "Profile details updated.",
       loadError: "Failed to load profile details.",
       saveError: "Failed to update profile details.",
+      avatarHint: "Upload profile image (max 2MB).",
+      avatarPick: "Choose avatar",
+      avatarUploading: "Uploading...",
+      avatarUploadError: "Failed to upload avatar.",
       fields: {
         fullName: "Full name",
         phone: "Phone",
@@ -252,19 +277,21 @@ const copy: Record<
   },
   ru: {
     title: "Личный кабинет",
-    subtitle: "Управляй заказами, избранным и настройками аккаунта.",
+    subtitle: "Управляй заказами и настройками аккаунта.",
     roleLabel: "Роль",
     tabs: {
       orders: "Заказы",
-      wishlist: "Избранное",
-      address: "Адрес",
+      profile: "Профиль",
       password: "Пароль"
     },
     orders: {
       title: "Мои заказы",
       subtitle: "История оформлений и подробности по заказам.",
+      searchPlaceholder: "Поиск по invoice, brand code, товару или OEM",
       loading: "Загрузка заказов...",
       empty: "Пока нет заказов.",
+      invoice: "Invoice",
+      actions: "Действие",
       details: "Открыть детали",
       hideDetails: "Скрыть детали",
       detailsLoading: "Загрузка деталей...",
@@ -272,29 +299,28 @@ const copy: Record<
       total: "Итого",
       status: "Статус",
       createdAt: "Дата",
-      warehouseCity: "Город склада",
       customer: "Покупатель",
       phone: "Телефон",
       address: "Адрес",
       comment: "Комментарий",
       noComment: "Комментария нет",
+      returnItemAction: "Вернуть товар",
+      returningItemAction: "Возврат...",
+      returnedDone: "Возврат оформлен.",
+      returnQty: "Кол-во к возврату",
+      returnReason: "Причина",
+      returnReasonPlaceholder: "Причина (необязательно)",
+      returnedLabel: "Возвращено",
       page: "Страница",
       prev: "Назад",
       next: "Вперед",
       errors: {
         load: "Не удалось загрузить заказы.",
-        details: "Не удалось загрузить детали заказа."
+        details: "Не удалось загрузить детали заказа.",
+        returnItem: "Не удалось оформить возврат товара."
       }
     },
-    wishlist: {
-      title: "Избранные товары",
-      subtitle: "Товары, которые ты сохранил на потом.",
-      empty: "В избранном пока пусто.",
-      toProduct: "К товару",
-      remove: "Удалить",
-      clear: "Очистить всё"
-    },
-    address: {
+    profile: {
       title: "Адрес и контакты",
       subtitle: "Эти данные используются при оформлении.",
       save: "Обновить данные",
@@ -302,6 +328,10 @@ const copy: Record<
       success: "Данные профиля обновлены.",
       loadError: "Не удалось загрузить данные профиля.",
       saveError: "Не удалось обновить данные профиля.",
+      avatarHint: "Загрузи аватар (до 2MB).",
+      avatarPick: "Выбрать аватар",
+      avatarUploading: "Загрузка...",
+      avatarUploadError: "Не удалось загрузить аватар.",
       fields: {
         fullName: "Имя и фамилия",
         phone: "Телефон",
@@ -330,14 +360,12 @@ const copy: Record<
 
 const tabs: Array<{id: AccountTab; icon: typeof ListOrdered}> = [
   {id: "orders", icon: ListOrdered},
-  {id: "wishlist", icon: Heart},
-  {id: "address", icon: MapPinHouse},
+  {id: "profile", icon: UserRound},
   {id: "password", icon: LockKeyhole}
 ];
 
 export default function AccountPage({language, user}: AccountPageProps) {
   const ui = copy[language];
-  const {items: wishlistItems, removeWishlistItem, clearWishlist} = useWishlist();
   const [activeTab, setActiveTab] = useState<AccountTab>("orders");
 
   const [profile, setProfile] = useState<AccountProfilePayload>(emptyProfile);
@@ -345,6 +373,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileAvatarUploading, setProfileAvatarUploading] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -356,7 +385,11 @@ export default function AccountPage({language, user}: AccountPageProps) {
   const [ordersPage, setOrdersPage] = useState<UserOrderPage | null>(null);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [ordersSuccess, setOrdersSuccess] = useState<string | null>(null);
+  const [returningItemKey, setReturningItemKey] = useState<string | null>(null);
   const [ordersPageIndex, setOrdersPageIndex] = useState(0);
+  const [ordersQueryInput, setOrdersQueryInput] = useState("");
+  const [ordersQuery, setOrdersQuery] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [detailsLoadingId, setDetailsLoadingId] = useState<number | null>(null);
   const [orderDetailsById, setOrderDetailsById] = useState<Record<number, UserOrderDetails>>({});
@@ -369,8 +402,19 @@ export default function AccountPage({language, user}: AccountPageProps) {
     if (activeTab !== "orders") {
       return;
     }
-    void loadOrders(ordersPageIndex);
-  }, [activeTab, ordersPageIndex, language]);
+    void loadOrders(ordersPageIndex, ordersQuery);
+  }, [activeTab, ordersPageIndex, ordersQuery, language]);
+
+  useEffect(() => {
+    if (activeTab !== "orders") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setOrdersQuery(ordersQueryInput.trim());
+      setOrdersPageIndex(0);
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, ordersQueryInput]);
 
   async function loadProfile() {
     try {
@@ -378,6 +422,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
       const data = await fetchAccountProfile();
       setProfile({
         fullName: data.fullName ?? "",
+        avatarUrl: data.avatarUrl ?? "",
         phone: data.phone ?? "",
         phoneAlt: data.phoneAlt ?? "",
         addressLine1: data.addressLine1 ?? "",
@@ -388,18 +433,19 @@ export default function AccountPage({language, user}: AccountPageProps) {
       });
       setProfileError(null);
     } catch {
-      setProfileError(ui.address.loadError);
+      setProfileError(ui.profile.loadError);
     } finally {
       setProfileLoading(false);
     }
   }
 
-  async function loadOrders(pageIndex: number) {
+  async function loadOrders(pageIndex: number, query: string) {
     try {
       setOrdersLoading(true);
-      const data = await fetchMyOrders({page: pageIndex, size: 10});
+      const data = await fetchMyOrders({page: pageIndex, size: 10, query});
       setOrdersPage(data);
       setOrdersError(null);
+      setOrdersSuccess(null);
     } catch {
       setOrdersError(ui.orders.errors.load);
     } finally {
@@ -427,6 +473,32 @@ export default function AccountPage({language, user}: AccountPageProps) {
     }
   }
 
+  async function handleReturnOrderItem(orderId: number, itemId: number, quantity: number, reason: string) {
+    const itemKey = `${orderId}:${itemId}`;
+    try {
+      setReturningItemKey(itemKey);
+      setOrdersError(null);
+      const updated = await requestOrderItemReturn(orderId, itemId, {
+        quantity,
+        reason: reason.trim().length > 0 ? reason.trim() : undefined
+      });
+      setOrderDetailsById((prev) => ({...prev, [orderId]: updated}));
+      setOrdersPage((prev) =>
+        prev
+          ? {
+            ...prev,
+            content: prev.content.map((order) => (order.id === orderId ? {...order, status: updated.status} : order))
+          }
+          : prev
+      );
+      setOrdersSuccess(ui.orders.returnedDone);
+    } catch (requestError) {
+      setOrdersError(getApiErrorMessage(requestError) ?? ui.orders.errors.returnItem);
+    } finally {
+      setReturningItemKey(null);
+    }
+  }
+
   async function handleSaveProfile(event: FormEvent) {
     event.preventDefault();
     try {
@@ -436,6 +508,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
       const updated = await updateAccountProfile(profile);
       setProfile({
         fullName: updated.fullName ?? "",
+        avatarUrl: updated.avatarUrl ?? "",
         phone: updated.phone ?? "",
         phoneAlt: updated.phoneAlt ?? "",
         addressLine1: updated.addressLine1 ?? "",
@@ -444,11 +517,53 @@ export default function AccountPage({language, user}: AccountPageProps) {
         postalCode: updated.postalCode ?? "",
         country: updated.country ?? ""
       });
-      setProfileSuccess(ui.address.success);
+      setProfileSuccess(ui.profile.success);
     } catch (error) {
-      setProfileError(getApiErrorMessage(error) ?? ui.address.saveError);
+      setProfileError(getApiErrorMessage(error) ?? ui.profile.saveError);
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  async function handleAvatarUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setProfileError(ui.profile.avatarUploadError);
+      setProfileSuccess(null);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileError(ui.profile.avatarUploadError);
+      setProfileSuccess(null);
+      return;
+    }
+
+    try {
+      setProfileAvatarUploading(true);
+      setProfileError(null);
+      setProfileSuccess(null);
+      const avatarUrl = await fileToDataUrl(file);
+      const updated = await updateAccountProfile({...profile, avatarUrl});
+      setProfile({
+        fullName: updated.fullName ?? "",
+        avatarUrl: updated.avatarUrl ?? "",
+        phone: updated.phone ?? "",
+        phoneAlt: updated.phoneAlt ?? "",
+        addressLine1: updated.addressLine1 ?? "",
+        addressLine2: updated.addressLine2 ?? "",
+        city: updated.city ?? "",
+        postalCode: updated.postalCode ?? "",
+        country: updated.country ?? ""
+      });
+      setProfileSuccess(ui.profile.success);
+    } catch (error) {
+      setProfileError(getApiErrorMessage(error) ?? ui.profile.avatarUploadError);
+    } finally {
+      setProfileAvatarUploading(false);
     }
   }
 
@@ -485,15 +600,6 @@ export default function AccountPage({language, user}: AccountPageProps) {
         <p className="text-xs uppercase tracking-[0.2em] text-brand-200">Richstok</p>
         <h1 className="theme-heading mt-2 text-3xl font-semibold">{ui.title}</h1>
         <p className="theme-text mt-2 text-sm">{ui.subtitle}</p>
-        {user && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-sm text-brand-100">
-            <span>{user.fullName}</span>
-            <span className="text-brand-300">•</span>
-            <span>
-              {ui.roleLabel}: {user.role}
-            </span>
-          </div>
-        )}
       </header>
 
       <section className="glass-card rounded-2xl p-3">
@@ -531,73 +637,116 @@ export default function AccountPage({language, user}: AccountPageProps) {
           >
             <h2 className="theme-heading text-lg font-semibold">{ui.orders.title}</h2>
             <p className="theme-text mt-1 text-sm">{ui.orders.subtitle}</p>
+            <label className="relative mt-3 block">
+              <Search className="theme-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+              <input
+                value={ordersQueryInput}
+                onChange={(event) => setOrdersQueryInput(event.target.value)}
+                placeholder={ui.orders.searchPlaceholder}
+                className="input-surface w-full rounded-xl border py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-300"
+              />
+            </label>
 
             {ordersLoading && <p className="theme-muted mt-4 text-sm">{ui.orders.loading}</p>}
             {ordersError && <p className="mt-4 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{ordersError}</p>}
+            {ordersSuccess && <p className="mt-4 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{ordersSuccess}</p>}
 
             {!ordersLoading && (ordersPage?.content.length ?? 0) === 0 && (
               <p className="theme-muted mt-4 text-sm">{ui.orders.empty}</p>
             )}
 
-            <div className="mt-4 space-y-3">
-              {ordersPage?.content.map((order) => (
-                <article key={order.id} className="tile-surface rounded-xl border px-3 py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="theme-heading text-sm font-semibold">{order.invoiceNumber}</p>
-                      <p className="theme-muted mt-1 text-xs">
-                        {ui.orders.status}: {order.status} · {ui.orders.createdAt}: {new Date(order.createdAt).toLocaleString()}
-                      </p>
-                      <p className="theme-muted mt-1 text-xs">
-                        {ui.orders.warehouseCity}: {formatFulfillmentCity(order.fulfillmentCity, language)}
-                      </p>
-                      <p className="theme-text mt-1 text-sm">
-                        {ui.orders.total}: <span className="font-semibold text-brand-200">{Number(order.totalAmount).toFixed(2)} {order.currencyCode}</span> · {ui.orders.items}: {order.itemCount}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void toggleOrderDetails(order.id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      {expandedOrderId === order.id ? ui.orders.hideDetails : ui.orders.details}
-                    </button>
-                  </div>
+            {ordersPage && ordersPage.content.length > 0 && (
+              <div className="mt-4 overflow-x-auto rounded-xl border border-white/12">
+                <table className="min-w-[760px] w-full border-collapse text-sm">
+                  <thead className="bg-brand-500/10">
+                    <tr className="border-b border-white/12">
+                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide theme-muted">{ui.orders.invoice}</th>
+                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide theme-muted">{ui.orders.status}</th>
+                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide theme-muted">{ui.orders.items}</th>
+                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide theme-muted">{ui.orders.total}</th>
+                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide theme-muted">{ui.orders.createdAt}</th>
+                      <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wide theme-muted">{ui.orders.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersPage.content.flatMap((order) => {
+                      const rows = [
+                        <tr key={`order-${order.id}`} className="border-t border-white/10 align-top">
+                          <td className="px-3 py-2.5">
+                            <p className="theme-heading font-semibold">{order.invoiceNumber}</p>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <p className="theme-text">{order.status}</p>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <p className="theme-text">{order.itemCount}</p>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <p className="font-semibold text-brand-200">{Number(order.totalAmount).toFixed(2)} {order.currencyCode}</p>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <p className="theme-text whitespace-nowrap">{new Date(order.createdAt).toLocaleString()}</p>
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => void toggleOrderDetails(order.id)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              {expandedOrderId === order.id ? ui.orders.hideDetails : ui.orders.details}
+                            </button>
+                          </td>
+                        </tr>
+                      ];
 
-                  {expandedOrderId === order.id && (
-                    <div className="mt-3 border-t border-white/10 pt-3">
-                      {detailsLoadingId === order.id ? (
-                        <p className="theme-muted text-sm">{ui.orders.detailsLoading}</p>
-                      ) : (
-                        orderDetailsById[order.id] && (
-                          <OrderDetailsBlock details={orderDetailsById[order.id]} ui={ui.orders} language={language} />
-                        )
-                      )}
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
+                      if (expandedOrderId === order.id) {
+                        rows.push(
+                          <tr key={`order-details-${order.id}`} className="border-t border-white/10">
+                            <td colSpan={6} className="px-3 py-3">
+                              {detailsLoadingId === order.id ? (
+                                <p className="theme-muted text-sm">{ui.orders.detailsLoading}</p>
+                              ) : (
+                                orderDetailsById[order.id] && (
+                                  <OrderDetailsBlock
+                                    details={orderDetailsById[order.id]}
+                                    ui={ui.orders}
+                                    canReturn={canReturnOrder(orderDetailsById[order.id].status)}
+                                    returningItemKey={returningItemKey}
+                                    onReturnItem={(itemId, quantity, reason) => void handleReturnOrderItem(order.id, itemId, quantity, reason)}
+                                  />
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return rows;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setOrdersPageIndex((prev) => Math.max(prev - 1, 0))}
                 disabled={ordersPageIndex === 0 || ordersLoading}
-                className="inline-flex items-center gap-1 rounded-lg border border-white/12 px-2.5 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 {ui.orders.prev}
               </button>
-              <span className="theme-muted text-xs">
+              <span className="rounded-xl border border-white/12 bg-brand-500/8 px-3 py-2 text-xs font-medium theme-text">
                 {ui.orders.page} {pageNumberLabel} / {Math.max(totalPages, 1)}
               </span>
               <button
                 type="button"
                 onClick={() => setOrdersPageIndex((prev) => prev + 1)}
                 disabled={Boolean(ordersPage?.last) || ordersLoading}
-                className="inline-flex items-center gap-1 rounded-lg border border-white/12 px-2.5 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {ui.orders.next}
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -606,79 +755,41 @@ export default function AccountPage({language, user}: AccountPageProps) {
           </motion.section>
         )}
 
-        {activeTab === "wishlist" && (
+        {activeTab === "profile" && (
           <motion.section
-            key="tab-wishlist"
+            key="tab-profile"
             initial={{opacity: 0, y: 8}}
             animate={{opacity: 1, y: 0}}
             exit={{opacity: 0, y: -8}}
             className="glass-card rounded-2xl p-5 sm:p-6"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="theme-heading text-lg font-semibold">{ui.wishlist.title}</h2>
-                <p className="theme-text mt-1 text-sm">{ui.wishlist.subtitle}</p>
+            <h2 className="theme-heading text-lg font-semibold">{ui.profile.title}</h2>
+            <p className="theme-text mt-1 text-sm">{ui.profile.subtitle}</p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-500/20 bg-brand-500/8 px-4 py-3">
+              <div className="relative h-16 w-16 overflow-hidden rounded-full border border-brand-500/35 bg-black/25">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={profile.fullName || "User avatar"} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-brand-200">
+                    <Camera className="h-6 w-6" />
+                  </div>
+                )}
               </div>
-              {wishlistItems.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearWishlist}
-                  className="inline-flex items-center gap-1 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-100 transition hover:bg-rose-500/20"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {ui.wishlist.clear}
-                </button>
-              )}
+              <div className="min-w-[220px] flex-1">
+                <p className="theme-text text-sm">{ui.profile.avatarHint}</p>
+                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
+                  <input type="file" accept="image/*" onChange={(event) => void handleAvatarUpload(event)} className="sr-only" />
+                  <Camera className="h-3.5 w-3.5" />
+                  {profileAvatarUploading ? ui.profile.avatarUploading : ui.profile.avatarPick}
+                </label>
+              </div>
             </div>
 
-            {wishlistItems.length === 0 ? (
-              <p className="theme-muted mt-4 text-sm">{ui.wishlist.empty}</p>
-            ) : (
-              <div className="mt-4 space-y-2">
-                {wishlistItems.map((item) => (
-                  <article key={item.id} className="tile-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="theme-heading truncate text-sm font-medium">{item.name}</p>
-                      <p className="theme-muted truncate text-xs">Brand code: {item.sku} · {item.category}</p>
-                      <p className="text-sm font-semibold text-brand-200">{Number(item.price).toFixed(2)} AZN</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        to={`/products/${item.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20"
-                      >
-                        {ui.wishlist.toProduct}
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => removeWishlistItem(item.id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-100 transition hover:bg-rose-500/20"
-                      >
-                        {ui.wishlist.remove}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </motion.section>
-        )}
-
-        {activeTab === "address" && (
-          <motion.section
-            key="tab-address"
-            initial={{opacity: 0, y: 8}}
-            animate={{opacity: 1, y: 0}}
-            exit={{opacity: 0, y: -8}}
-            className="glass-card rounded-2xl p-5 sm:p-6"
-          >
-            <h2 className="theme-heading text-lg font-semibold">{ui.address.title}</h2>
-            <p className="theme-text mt-1 text-sm">{ui.address.subtitle}</p>
-
             <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
-              {(Object.keys(profile) as Array<keyof AccountProfilePayload>).map((field) => (
+              {editableProfileFields.map((field) => (
                 <label key={field} className={`block text-sm ${field === "addressLine1" || field === "addressLine2" ? "sm:col-span-2" : ""}`}>
-                  <span className="theme-text mb-1 block">{ui.address.fields[field]}</span>
+                  <span className="theme-text mb-1 block">{ui.profile.fields[field]}</span>
                   <input
                     required={["fullName", "phone", "addressLine1", "city", "country"].includes(field)}
                     type="text"
@@ -694,7 +805,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
                 disabled={profileSaving || profileLoading}
                 className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
               >
-                {profileSaving ? ui.address.saving : ui.address.save}
+                {profileSaving ? ui.profile.saving : ui.profile.save}
               </button>
             </form>
 
@@ -772,26 +883,34 @@ export default function AccountPage({language, user}: AccountPageProps) {
 function OrderDetailsBlock({
   details,
   ui,
-  language
+  canReturn,
+  returningItemKey,
+  onReturnItem
 }: {
   details: UserOrderDetails;
-  language: Language;
   ui: {
-    warehouseCity: string;
     customer: string;
     phone: string;
     address: string;
     comment: string;
     noComment: string;
+    returnItemAction: string;
+    returningItemAction: string;
+    returnQty: string;
+    returnReason: string;
+    returnReasonPlaceholder: string;
+    returnedLabel: string;
   };
+  canReturn: boolean;
+  returningItemKey: string | null;
+  onReturnItem: (itemId: number, quantity: number, reason: string) => void;
 }) {
+  const [returnQtyByItem, setReturnQtyByItem] = useState<Record<number, number>>({});
+  const [returnReasonByItem, setReturnReasonByItem] = useState<Record<number, string>>({});
+
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2">
-        <p className="theme-text text-sm">
-          <span className="theme-muted">{ui.warehouseCity}: </span>
-          {formatFulfillmentCity(details.fulfillmentCity, language)}
-        </p>
         <p className="theme-text text-sm">
           <span className="theme-muted">{ui.customer}: </span>
           {details.customerFullName}
@@ -816,12 +935,60 @@ function OrderDetailsBlock({
 
       <div className="space-y-2">
         {details.items.map((item, index) => (
-          <div key={`${item.productId ?? "no"}-${index}`} className="rounded-lg border border-white/10 px-3 py-2">
+          <div key={`${item.id}-${item.productId ?? "no"}-${index}`} className="rounded-lg border border-white/10 px-3 py-2">
             <p className="theme-heading text-sm">{item.productName}</p>
             <p className="theme-muted text-xs">
               Brand code: {item.productSku} · {item.quantity} × {Number(item.unitPrice).toFixed(2)} {details.currencyCode}
             </p>
+            {item.returnedQuantity > 0 && (
+              <p className="theme-muted mt-1 text-xs">
+                {ui.returnedLabel}: {item.returnedQuantity}
+              </p>
+            )}
+            {item.returnReason && <p className="theme-muted mt-1 whitespace-pre-line text-xs">{item.returnReason}</p>}
             <p className="text-sm font-semibold text-brand-200">{Number(item.lineTotal).toFixed(2)} {details.currencyCode}</p>
+
+            {canReturn && item.quantity - item.returnedQuantity > 0 && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-[120px,1fr,auto]">
+                <label className="text-xs theme-text">
+                  <span className="mb-1 block">{ui.returnQty}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(item.quantity - item.returnedQuantity, 1)}
+                    value={returnQtyByItem[item.id] ?? 1}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      const safeValue = Number.isFinite(parsed) ? Math.max(1, Math.min(Math.trunc(parsed), item.quantity - item.returnedQuantity)) : 1;
+                      setReturnQtyByItem((previous) => ({...previous, [item.id]: safeValue}));
+                    }}
+                    className="input-surface w-full rounded-lg border px-2 py-1.5 text-sm outline-none"
+                  />
+                </label>
+                <label className="text-xs theme-text">
+                  <span className="mb-1 block">{ui.returnReason}</span>
+                  <input
+                    type="text"
+                    value={returnReasonByItem[item.id] ?? ""}
+                    onChange={(event) => setReturnReasonByItem((previous) => ({...previous, [item.id]: event.target.value}))}
+                    placeholder={ui.returnReasonPlaceholder}
+                    className="input-surface w-full rounded-lg border px-2 py-1.5 text-sm outline-none"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={returningItemKey === `${details.id}:${item.id}`}
+                  onClick={() => {
+                    const quantity = returnQtyByItem[item.id] ?? 1;
+                    const reason = returnReasonByItem[item.id] ?? "";
+                    onReturnItem(item.id, quantity, reason);
+                  }}
+                  className="self-end rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {returningItemKey === `${details.id}:${item.id}` ? ui.returningItemAction : ui.returnItemAction}
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -829,14 +996,8 @@ function OrderDetailsBlock({
   );
 }
 
-function formatFulfillmentCity(city: "BAKI" | "GANCA" | null | undefined, language: Language): string {
-  if (city === "GANCA") {
-    return language === "ru" ? "Гянджа" : language === "az" ? "Gəncə" : "Gence";
-  }
-  if (city === "BAKI") {
-    return language === "ru" ? "Баку" : language === "az" ? "Bakı" : "Baki";
-  }
-  return "—";
+function canReturnOrder(status: UserOrderDetails["status"]): boolean {
+  return status === "COMPLETED" || status === "SHIPPED" || status === "PARTIALLY_RETURNED";
 }
 
 function getApiErrorMessage(error: unknown): string | null {
@@ -850,4 +1011,30 @@ function getApiErrorMessage(error: unknown): string | null {
   }
   const normalized = message.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read avatar file."));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string" && result.length > 0) {
+        resolve(result);
+        return;
+      }
+      reject(new Error("Invalid avatar file."));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function getInitials(fullName: string): string {
+  const normalized = fullName.trim();
+  if (!normalized) {
+    return "RS";
+  }
+  const parts = normalized.split(/\s+/).slice(0, 2);
+  const initials = parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+  return initials || "RS";
 }
