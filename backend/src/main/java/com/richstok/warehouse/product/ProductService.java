@@ -3,6 +3,7 @@ package com.richstok.warehouse.product;
 import com.richstok.warehouse.common.NotFoundException;
 import com.richstok.warehouse.common.dto.PageResponse;
 import com.richstok.warehouse.product.dto.CatalogCategoryResponse;
+import com.richstok.warehouse.product.dto.CatalogStatsResponse;
 import com.richstok.warehouse.product.dto.ProductBulkImportResponse;
 import com.richstok.warehouse.product.dto.ProductRequest;
 import com.richstok.warehouse.product.dto.ProductResponse;
@@ -87,6 +88,42 @@ public class ProductService {
                 .sorted(Map.Entry.comparingByKey(Comparator.comparing(value -> value.toLowerCase(Locale.ROOT))))
                 .map(entry -> new CatalogCategoryResponse(categoryLabels.get(entry.getKey()), entry.getValue()))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CatalogStatsResponse getCatalogStats() {
+        List<Product> catalogProducts = getCatalogProducts();
+
+        long totalProducts = catalogProducts.size();
+        long totalBrands = catalogProducts.stream()
+                .map(Product::getBrand)
+                .map(this::normalizeNullable)
+                .filter(value -> value != null)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .distinct()
+                .count();
+        long totalCategories = catalogProducts.stream()
+                .map(Product::getCategory)
+                .map(this::normalizeCatalogCategory)
+                .filter(value -> value != null)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .distinct()
+                .count();
+        long totalStockQuantity = catalogProducts.stream()
+                .filter(product -> !product.isUnknownCount())
+                .mapToLong(product -> Math.max(0, product.getStockQuantity() == null ? 0 : product.getStockQuantity()))
+                .sum();
+        long unknownStockProducts = catalogProducts.stream()
+                .filter(Product::isUnknownCount)
+                .count();
+
+        return new CatalogStatsResponse(
+                totalProducts,
+                totalBrands,
+                totalCategories,
+                totalStockQuantity,
+                unknownStockProducts
+        );
     }
 
     @Transactional(readOnly = true)

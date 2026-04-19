@@ -3,7 +3,7 @@ import type {AccountProfilePayload, AuthUser} from "@/types/auth";
 import type {UserOrderDetails, UserOrderPage} from "@/types/order";
 import type {Language} from "@/types/ui";
 import {AnimatePresence, motion} from "framer-motion";
-import {Camera, ChevronLeft, ChevronRight, Eye, ListOrdered, LockKeyhole, Search, UserRound} from "lucide-react";
+import {Camera, ChevronLeft, ChevronRight, Eye, ListOrdered, LockKeyhole, RotateCcw, Search, UserRound} from "lucide-react";
 import type {ChangeEvent, FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
@@ -12,7 +12,7 @@ type AccountPageProps = {
   user: AuthUser | null;
 };
 
-type AccountTab = "orders" | "profile" | "password";
+type AccountTab = "orders" | "returns" | "profile" | "password";
 
 const emptyProfile: AccountProfilePayload = {
   fullName: "",
@@ -47,6 +47,10 @@ const copy: Record<
     orders: {
       title: string;
       subtitle: string;
+      returnsTitle: string;
+      returnsSubtitle: string;
+      returnsHint: string;
+      returnsEmpty: string;
       searchPlaceholder: string;
       loading: string;
       empty: string;
@@ -58,6 +62,7 @@ const copy: Record<
       items: string;
       total: string;
       status: string;
+      statusLabels: Record<string, string>;
       createdAt: string;
       customer: string;
       phone: string;
@@ -119,12 +124,17 @@ const copy: Record<
     roleLabel: "Rol",
     tabs: {
       orders: "Sifarişlər",
-      profile: "Profil",
+      returns: "Qaytarma",
+      profile: "Hesab",
       password: "Parol"
     },
     orders: {
       title: "Sifarişlərim",
       subtitle: "Son checkout tarixçəsi və sifariş detalları.",
+      returnsTitle: "Məhsul qaytarılması",
+      returnsSubtitle: "Qaytarma yalnız qəbul edilmiş sifarişlər üçün əlçatandır.",
+      returnsHint: "Qaytarma üçün sifariş detalını aç və məhsulu seç.",
+      returnsEmpty: "Qaytarma üçün uyğun sifariş tapılmadı.",
       searchPlaceholder: "Invoice, brand code, ad və ya OEM ilə axtarış",
       loading: "Sifarişlər yüklənir...",
       empty: "Hələ sifariş yoxdur.",
@@ -136,6 +146,15 @@ const copy: Record<
       items: "Məhsul sayı",
       total: "Cəm",
       status: "Status",
+      statusLabels: {
+        PENDING: "Gözləmədə",
+        PROCESSING: "İcrada",
+        SHIPPED: "Yoldadır",
+        COMPLETED: "Qəbul edildi",
+        PARTIALLY_RETURNED: "Qismən geri qaytarılıb",
+        CANCELLED: "Ləğv edildi",
+        RETURNED: "Geri qaytarıldı"
+      },
       createdAt: "Tarix",
       customer: "Alıcı",
       phone: "Telefon",
@@ -200,12 +219,17 @@ const copy: Record<
     roleLabel: "Role",
     tabs: {
       orders: "Orders",
-      profile: "Profile",
+      returns: "Returns",
+      profile: "Account",
       password: "Password"
     },
     orders: {
       title: "My orders",
       subtitle: "Your recent checkout history and order details.",
+      returnsTitle: "Item returns",
+      returnsSubtitle: "Returns are available only for accepted orders.",
+      returnsHint: "Open order details and choose the item to return.",
+      returnsEmpty: "No return-eligible orders were found.",
       searchPlaceholder: "Search by invoice, brand code, product or OEM",
       loading: "Loading orders...",
       empty: "You have no orders yet.",
@@ -217,6 +241,15 @@ const copy: Record<
       items: "Items",
       total: "Total",
       status: "Status",
+      statusLabels: {
+        PENDING: "Pending",
+        PROCESSING: "Processing",
+        SHIPPED: "Shipped",
+        COMPLETED: "Accepted",
+        PARTIALLY_RETURNED: "Partially returned",
+        CANCELLED: "Cancelled",
+        RETURNED: "Returned"
+      },
       createdAt: "Created",
       customer: "Customer",
       phone: "Phone",
@@ -281,12 +314,17 @@ const copy: Record<
     roleLabel: "Роль",
     tabs: {
       orders: "Заказы",
-      profile: "Профиль",
+      returns: "Возвраты",
+      profile: "Аккаунт",
       password: "Пароль"
     },
     orders: {
       title: "Мои заказы",
       subtitle: "История оформлений и подробности по заказам.",
+      returnsTitle: "Возврат товаров",
+      returnsSubtitle: "Возврат доступен только для принятых заказов.",
+      returnsHint: "Открой детали заказа и выбери товар для возврата.",
+      returnsEmpty: "Нет заказов, доступных для возврата.",
       searchPlaceholder: "Поиск по invoice, brand code, товару или OEM",
       loading: "Загрузка заказов...",
       empty: "Пока нет заказов.",
@@ -298,6 +336,15 @@ const copy: Record<
       items: "Товаров",
       total: "Итого",
       status: "Статус",
+      statusLabels: {
+        PENDING: "Ожидает",
+        PROCESSING: "В обработке",
+        SHIPPED: "Отправлен",
+        COMPLETED: "Принят",
+        PARTIALLY_RETURNED: "Частичный возврат",
+        CANCELLED: "Отменен",
+        RETURNED: "Возврат"
+      },
       createdAt: "Дата",
       customer: "Покупатель",
       phone: "Телефон",
@@ -360,8 +407,8 @@ const copy: Record<
 
 const tabs: Array<{id: AccountTab; icon: typeof ListOrdered}> = [
   {id: "orders", icon: ListOrdered},
+  {id: "returns", icon: RotateCcw},
   {id: "profile", icon: UserRound},
-  {id: "password", icon: LockKeyhole}
 ];
 
 export default function AccountPage({language, user}: AccountPageProps) {
@@ -399,14 +446,14 @@ export default function AccountPage({language, user}: AccountPageProps) {
   }, [language]);
 
   useEffect(() => {
-    if (activeTab !== "orders") {
+    if (activeTab !== "orders" && activeTab !== "returns") {
       return;
     }
     void loadOrders(ordersPageIndex, ordersQuery);
   }, [activeTab, ordersPageIndex, ordersQuery, language]);
 
   useEffect(() => {
-    if (activeTab !== "orders") {
+    if (activeTab !== "orders" && activeTab !== "returns") {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -593,6 +640,14 @@ export default function AccountPage({language, user}: AccountPageProps) {
 
   const pageNumberLabel = useMemo(() => (ordersPage?.page ?? 0) + 1, [ordersPage?.page]);
   const totalPages = useMemo(() => ordersPage?.totalPages ?? 1, [ordersPage?.totalPages]);
+  const isReturnsTab = activeTab === "returns";
+  const visibleOrders = useMemo(() => {
+    const content = ordersPage?.content ?? [];
+    if (!isReturnsTab) {
+      return content;
+    }
+    return content.filter((order) => isReturnsTabOrderStatus(order.status));
+  }, [isReturnsTab, ordersPage?.content]);
 
   return (
     <motion.section initial={{opacity: 0, y: 14}} animate={{opacity: 1, y: 0}} exit={{opacity: 0, y: -10}} transition={{duration: 0.3}} className="space-y-5">
@@ -603,7 +658,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
       </header>
 
       <section className="glass-card rounded-2xl p-3">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2 grid-cols-3">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -627,16 +682,21 @@ export default function AccountPage({language, user}: AccountPageProps) {
       </section>
 
       <AnimatePresence mode="wait">
-        {activeTab === "orders" && (
+        {(activeTab === "orders" || activeTab === "returns") && (
           <motion.section
-            key="tab-orders"
+            key={activeTab === "returns" ? "tab-returns" : "tab-orders"}
             initial={{opacity: 0, y: 8}}
             animate={{opacity: 1, y: 0}}
             exit={{opacity: 0, y: -8}}
             className="glass-card rounded-2xl p-5 sm:p-6"
           >
-            <h2 className="theme-heading text-lg font-semibold">{ui.orders.title}</h2>
-            <p className="theme-text mt-1 text-sm">{ui.orders.subtitle}</p>
+            <h2 className="theme-heading text-lg font-semibold">
+              {isReturnsTab ? ui.orders.returnsTitle : ui.orders.title}
+            </h2>
+            <p className="theme-text mt-1 text-sm">
+              {isReturnsTab ? ui.orders.returnsSubtitle : ui.orders.subtitle}
+            </p>
+            {isReturnsTab && <p className="theme-muted mt-2 text-xs">{ui.orders.returnsHint}</p>}
             <label className="relative mt-3 block">
               <Search className="theme-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
               <input
@@ -651,11 +711,11 @@ export default function AccountPage({language, user}: AccountPageProps) {
             {ordersError && <p className="mt-4 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{ordersError}</p>}
             {ordersSuccess && <p className="mt-4 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{ordersSuccess}</p>}
 
-            {!ordersLoading && (ordersPage?.content.length ?? 0) === 0 && (
-              <p className="theme-muted mt-4 text-sm">{ui.orders.empty}</p>
+            {!ordersLoading && visibleOrders.length === 0 && (
+              <p className="theme-muted mt-4 text-sm">{isReturnsTab ? ui.orders.returnsEmpty : ui.orders.empty}</p>
             )}
 
-            {ordersPage && ordersPage.content.length > 0 && (
+            {ordersPage && visibleOrders.length > 0 && (
               <div className="mt-4 overflow-x-auto rounded-xl border border-white/12">
                 <table className="min-w-[760px] w-full border-collapse text-sm">
                   <thead className="bg-brand-500/10">
@@ -669,14 +729,14 @@ export default function AccountPage({language, user}: AccountPageProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {ordersPage.content.flatMap((order) => {
+                    {visibleOrders.flatMap((order) => {
                       const rows = [
                         <tr key={`order-${order.id}`} className="border-t border-white/10 align-top">
                           <td className="px-3 py-2.5">
                             <p className="theme-heading font-semibold">{order.invoiceNumber}</p>
                           </td>
                           <td className="px-3 py-2.5">
-                            <p className="theme-text">{order.status}</p>
+                            <p className="theme-text">{ui.orders.statusLabels[order.status] ?? order.status}</p>
                           </td>
                           <td className="px-3 py-2.5">
                             <p className="theme-text">{order.itemCount}</p>
@@ -711,7 +771,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
                                   <OrderDetailsBlock
                                     details={orderDetailsById[order.id]}
                                     ui={ui.orders}
-                                    canReturn={canReturnOrder(orderDetailsById[order.id].status)}
+                                    canReturn={isReturnsTab && canReturnOrder(orderDetailsById[order.id].status)}
                                     returningItemKey={returningItemKey}
                                     onReturnItem={(itemId, quantity, reason) => void handleReturnOrderItem(order.id, itemId, quantity, reason)}
                                   />
@@ -756,124 +816,124 @@ export default function AccountPage({language, user}: AccountPageProps) {
         )}
 
         {activeTab === "profile" && (
-          <motion.section
-            key="tab-profile"
-            initial={{opacity: 0, y: 8}}
-            animate={{opacity: 1, y: 0}}
-            exit={{opacity: 0, y: -8}}
-            className="glass-card rounded-2xl p-5 sm:p-6"
-          >
-            <h2 className="theme-heading text-lg font-semibold">{ui.profile.title}</h2>
-            <p className="theme-text mt-1 text-sm">{ui.profile.subtitle}</p>
+          <>
+            <motion.section
+                key="tab-profile"
+                initial={{opacity: 0, y: 8}}
+                animate={{opacity: 1, y: 0}}
+                exit={{opacity: 0, y: -8}}
+                className="glass-card rounded-2xl p-5 sm:p-6"
+            >
+              <h2 className="theme-heading text-lg font-semibold">{ui.profile.title}</h2>
+              <p className="theme-text mt-1 text-sm">{ui.profile.subtitle}</p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-500/20 bg-brand-500/8 px-4 py-3">
-              <div className="relative h-16 w-16 overflow-hidden rounded-full border border-brand-500/35 bg-black/25">
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt={profile.fullName || "User avatar"} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-brand-200">
-                    <Camera className="h-6 w-6" />
-                  </div>
-                )}
+              <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-500/20 bg-brand-500/8 px-4 py-3">
+                <div className="relative h-16 w-16 overflow-hidden rounded-full border border-brand-500/35 bg-black/25">
+                  {profile.avatarUrl ? (
+                      <img src={profile.avatarUrl} alt={profile.fullName || "User avatar"} className="h-full w-full object-cover" />
+                  ) : (
+                      <div className="flex h-full w-full items-center justify-center text-brand-200">
+                        <Camera className="h-6 w-6" />
+                      </div>
+                  )}
+                </div>
+                <div className="min-w-[220px] flex-1">
+                  <p className="theme-text text-sm">{ui.profile.avatarHint}</p>
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
+                    <input type="file" accept="image/*" onChange={(event) => void handleAvatarUpload(event)} className="sr-only" />
+                    <Camera className="h-3.5 w-3.5" />
+                    {profileAvatarUploading ? ui.profile.avatarUploading : ui.profile.avatarPick}
+                  </label>
+                </div>
               </div>
-              <div className="min-w-[220px] flex-1">
-                <p className="theme-text text-sm">{ui.profile.avatarHint}</p>
-                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
-                  <input type="file" accept="image/*" onChange={(event) => void handleAvatarUpload(event)} className="sr-only" />
-                  <Camera className="h-3.5 w-3.5" />
-                  {profileAvatarUploading ? ui.profile.avatarUploading : ui.profile.avatarPick}
-                </label>
-              </div>
-            </div>
 
-            <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
-              {editableProfileFields.map((field) => (
-                <label key={field} className={`block text-sm ${field === "addressLine1" || field === "addressLine2" ? "sm:col-span-2" : ""}`}>
-                  <span className="theme-text mb-1 block">{ui.profile.fields[field]}</span>
+              <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
+                {editableProfileFields.map((field) => (
+                    <label key={field} className={`block text-sm ${field === "addressLine1" || field === "addressLine2" ? "sm:col-span-2" : ""}`}>
+                      <span className="theme-text mb-1 block">{ui.profile.fields[field]}</span>
+                      <input
+                          required={["fullName", "phone", "addressLine1", "city", "country"].includes(field)}
+                          type="text"
+                          value={profile[field]}
+                          onChange={(event) => setProfile((prev) => ({...prev, [field]: event.target.value}))}
+                          className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
+                      />
+                    </label>
+                ))}
+
+                <button
+                    type="submit"
+                    disabled={profileSaving || profileLoading}
+                    className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
+                >
+                  {profileSaving ? ui.profile.saving : ui.profile.save}
+                </button>
+              </form>
+
+              {profileError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{profileError}</p>}
+              {profileSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{profileSuccess}</p>}
+            </motion.section>
+
+            <motion.section
+                key="tab-password"
+                initial={{opacity: 0, y: 8}}
+                animate={{opacity: 1, y: 0}}
+                exit={{opacity: 0, y: -8}}
+                className="glass-card rounded-2xl p-5 sm:p-6"
+            >
+              <h2 className="theme-heading text-lg font-semibold">{ui.password.title}</h2>
+              <p className="theme-text mt-1 text-sm">{ui.password.subtitle}</p>
+
+              <form onSubmit={handleChangePassword} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm sm:col-span-2">
+                  <span className="theme-text mb-1 block">{ui.password.currentPassword}</span>
                   <input
-                    required={["fullName", "phone", "addressLine1", "city", "country"].includes(field)}
-                    type="text"
-                    value={profile[field]}
-                    onChange={(event) => setProfile((prev) => ({...prev, [field]: event.target.value}))}
-                    className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
+                      required
+                      minLength={8}
+                      type="password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
                   />
                 </label>
-              ))}
 
-              <button
-                type="submit"
-                disabled={profileSaving || profileLoading}
-                className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
-              >
-                {profileSaving ? ui.profile.saving : ui.profile.save}
-              </button>
-            </form>
+                <label className="block text-sm">
+                  <span className="theme-text mb-1 block">{ui.password.newPassword}</span>
+                  <input
+                      required
+                      minLength={8}
+                      type="password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
+                  />
+                </label>
 
-            {profileError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{profileError}</p>}
-            {profileSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{profileSuccess}</p>}
-          </motion.section>
-        )}
+                <label className="block text-sm">
+                  <span className="theme-text mb-1 block">{ui.password.repeatPassword}</span>
+                  <input
+                      required
+                      minLength={8}
+                      type="password"
+                      value={repeatPassword}
+                      onChange={(event) => setRepeatPassword(event.target.value)}
+                      className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
+                  />
+                </label>
 
-        {activeTab === "password" && (
-          <motion.section
-            key="tab-password"
-            initial={{opacity: 0, y: 8}}
-            animate={{opacity: 1, y: 0}}
-            exit={{opacity: 0, y: -8}}
-            className="glass-card rounded-2xl p-5 sm:p-6"
-          >
-            <h2 className="theme-heading text-lg font-semibold">{ui.password.title}</h2>
-            <p className="theme-text mt-1 text-sm">{ui.password.subtitle}</p>
+                <button
+                    type="submit"
+                    disabled={passwordLoading}
+                    className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
+                >
+                  {passwordLoading ? ui.password.submitting : ui.password.submit}
+                </button>
+              </form>
 
-            <form onSubmit={handleChangePassword} className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm sm:col-span-2">
-                <span className="theme-text mb-1 block">{ui.password.currentPassword}</span>
-                <input
-                  required
-                  minLength={8}
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="theme-text mb-1 block">{ui.password.newPassword}</span>
-                <input
-                  required
-                  minLength={8}
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="theme-text mb-1 block">{ui.password.repeatPassword}</span>
-                <input
-                  required
-                  minLength={8}
-                  type="password"
-                  value={repeatPassword}
-                  onChange={(event) => setRepeatPassword(event.target.value)}
-                  className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={passwordLoading}
-                className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
-              >
-                {passwordLoading ? ui.password.submitting : ui.password.submit}
-              </button>
-            </form>
-
-            {passwordError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{passwordError}</p>}
-            {passwordSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{passwordSuccess}</p>}
-          </motion.section>
+              {passwordError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{passwordError}</p>}
+              {passwordSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{passwordSuccess}</p>}
+            </motion.section>
+          </>
         )}
       </AnimatePresence>
     </motion.section>
@@ -998,6 +1058,10 @@ function OrderDetailsBlock({
 
 function canReturnOrder(status: UserOrderDetails["status"]): boolean {
   return status === "COMPLETED" || status === "SHIPPED" || status === "PARTIALLY_RETURNED";
+}
+
+function isReturnsTabOrderStatus(status: UserOrderDetails["status"]): boolean {
+  return canReturnOrder(status) || status === "RETURNED";
 }
 
 function getApiErrorMessage(error: unknown): string | null {

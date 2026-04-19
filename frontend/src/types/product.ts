@@ -3,6 +3,10 @@ export type StockState = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 export type Product = {
   id: number;
   name: string;
+  promoTag?: string;
+  promoTitle?: string;
+  promoSubtitle?: string;
+  promoSlides?: Array<{title: string; description: string; action: string}>;
   slug: string;
   sku: string;
   category: string;
@@ -49,6 +53,14 @@ export type ProductBulkImportResponse = {
 export type ProductCategorySummary = {
   name: string;
   count: number;
+};
+
+export type ProductCatalogStats = {
+  totalProducts: number;
+  totalBrands: number;
+  totalCategories: number;
+  totalStockQuantity: number;
+  unknownStockProducts: number;
 };
 
 export type PageResponse<T> = {

@@ -68,6 +68,9 @@ public class OrderRecord {
     @Column(nullable = false, length = 3)
     private String currencyCode;
 
+    @Column(name = "customer_language", nullable = false, length = 8)
+    private String customerLanguage;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private OrderStatus status;

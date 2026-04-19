@@ -293,6 +293,22 @@ body {
   transition-timing-function: linear !important;
 }
 
+.promo-swiper .swiper-pagination {
+  position: static;
+  margin-top: 0.75rem;
+}
+
+.promo-swiper .swiper-pagination-bullet {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: rgba(239, 68, 68, 0.35);
+  opacity: 1;
+}
+
+.promo-swiper .swiper-pagination-bullet-active {
+  background: rgba(220, 38, 38, 0.95);
+}
+
 .brand-slide {
   display: flex;
   align-items: center;

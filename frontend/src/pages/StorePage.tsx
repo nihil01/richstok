@@ -1,12 +1,13 @@
 import {
   fetchBrandImages,
   fetchCatalogCategories,
+  fetchCatalogStats,
   fetchCatalogProductsPage,
   searchCatalogProducts
 } from "@/api/client";
 import ProductCard from "@/components/ProductCard";
 import type {DisplayCurrency} from "@/types/currency";
-import type {Product, ProductCategorySummary} from "@/types/product";
+import type {Product, ProductCatalogStats, ProductCategorySummary} from "@/types/product";
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
 import {motion} from "framer-motion";
@@ -30,10 +31,11 @@ import {
 } from "lucide-react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import {useNavigate} from "react-router-dom";
-import {Autoplay, FreeMode} from "swiper/modules";
+import {Autoplay, FreeMode, Pagination} from "swiper/modules";
 import {Swiper, SwiperSlide} from "swiper/react";
 import "swiper/css";
 import "swiper/css/free-mode";
+import "swiper/css/pagination";
 
 const fallbackProducts: Product[] = [
   {
@@ -101,13 +103,18 @@ const storeCopy: Record<
     badge: string;
     description: string;
     searchPlaceholder: string;
+    animatedPlaceholders: string[];
     searchButton: string;
     searchLoading: string;
     searchEmpty: string;
     quickTitle: string;
     quickDescription: string;
     allCategories: string;
-    highlights: Array<{title: string; value: string; caption: string}>;
+    promoTag: string;
+    promoTitle: string;
+    promoSubtitle: string;
+    promoSlides: Array<{title: string; description: string; action: string}>;
+    highlights: Array<{title: string; caption: string}>;
     hitsTag: string;
     hitsTitle: string;
     allProducts: string;
@@ -126,24 +133,50 @@ const storeCopy: Record<
     description:
       "Biz yalnız avtomobil hissələri satırıq: orijinal və keyfiyyətli analoqlar.",
     searchPlaceholder: "Ad, OEM, brand code, model və ya artikul ilə axtarış",
+    animatedPlaceholders: [
+      "MANN FILTER C 35 154 axtar",
+      "OEM kod ilə axtar: 06H115562",
+      "Model ilə axtar: Toyota Camry",
+      "Kateqoriya ilə axtar: Filtrlər"
+    ],
     searchButton: "Məhsulu tap",
     searchLoading: "Axtarılır...",
     searchEmpty: "Uyğun məhsul tapılmadı.",
     quickTitle: "Kateqoriyalar",
     quickDescription: "Kateqoriyalar backend katalogundan real vaxtda formalaşır.",
     allCategories: "Hamısı",
+    promoTag: "Real promo",
+    promoTitle: "Həftənin aktiv kampaniyaları",
+    promoSubtitle: "Məhdud stoklu real təkliflər — qiymətlər anlıq yenilənir.",
+    promoSlides: [
+      {
+        title: "Liqui Moly Top Tec 4200 5W-30 — 15% endirim",
+        description: "Mühərrik yağında həftəlik kampaniya. Müəyyən modellər üçün eyni gün təhvil.",
+        action: "Yağlara bax"
+      },
+      {
+        title: "MANN FILTER dəsti 3+1",
+        description: "Hava + yağ + salon filtr al, 1 filtr hədiyyə. Aksiya stok bitənədək etibarlıdır.",
+        action: "Filtrlərə keç"
+      },
+      {
+        title: "Brembo brake kit — pulsuz çatdırılma",
+        description: "Disk + kolodka komplektlərində Bakı daxili pulsuz çatdırılma və sürətli göndəriş.",
+        action: "Əyləc hissələri"
+      }
+    ],
     highlights: [
-      {title: "Brand code", value: "12 000+", caption: "stokda məhsul"},
-      {title: "Brendlər", value: "95+", caption: "kataloq təchizatçıları"},
-      {title: "Yenilənmə", value: "24/7", caption: "stok məlumatları"},
-      {title: "Anbar", value: "Live", caption: "aktual qalıqlar"}
+      {title: "Brand code", caption: "anbarda dəqiq qalıq"},
+      {title: "Brendlər", caption: "kataloq təchizatçıları"},
+      {title: "Kateqoriyalar", caption: "kataloq bölməsi"},
+      {title: "Məhsullar", caption: "aktiv məhsul mövqeyi"}
     ],
     hitsTag: "Məhsul kataloqu",
     hitsTitle: "Məhsullar",
     allProducts: "Bütün məhsullar",
     loading: "Kataloq yüklənir...",
     error: "Kataloq yüklənmədi. Demo məhsullar göstərilir.",
-    brandsTitle: "Stokda olan brendlər",
+    brandsTitle: "Stokda olan markalar",
     brandsDescription: "Orijinal və sınanmış avtomobil hissəsi istehsalçıları.",
     orderSteps: [
       {title: "Məhsul seçimi", description: "Ad, OEM, brand code, model və ya kateqoriya ilə tap."},
@@ -159,24 +192,50 @@ const storeCopy: Record<
     description:
       "We sell only automotive parts: genuine and trusted aftermarket components",
     searchPlaceholder: "Search by name, OEM, model, category or brand code",
+    animatedPlaceholders: [
+      "Search MANN FILTER C 35 154",
+      "Search by OEM: 06H115562",
+      "Search by model: Toyota Camry",
+      "Search by category: Filters"
+    ],
     searchButton: "Find product",
     searchLoading: "Searching...",
     searchEmpty: "No matching products found.",
     quickTitle: "Categories",
     quickDescription: "Category blocks are grouped directly from backend catalog data.",
     allCategories: "All",
+    promoTag: "Real promo",
+    promoTitle: "Live weekly deals",
+    promoSubtitle: "Limited-stock offers with real pricing from the catalog.",
+    promoSlides: [
+      {
+        title: "Liqui Moly Top Tec 4200 5W-30 — 15% off",
+        description: "Weekly engine oil deal with same-day dispatch for selected models.",
+        action: "Browse oils"
+      },
+      {
+        title: "MANN FILTER combo 3+1",
+        description: "Buy air + oil + cabin filter and get one extra filter for free while stock lasts.",
+        action: "See filters"
+      },
+      {
+        title: "Brembo brake kit — free delivery",
+        description: "Front disc + pad kits with free city delivery and fast order processing.",
+        action: "Browse brakes"
+      }
+    ],
     highlights: [
-      {title: "Brand code", value: "12,000+", caption: "items in stock"},
-      {title: "Brands", value: "95+", caption: "catalog suppliers"},
-      {title: "Updates", value: "24/7", caption: "inventory refresh"},
-      {title: "Warehouse", value: "Live", caption: "actual availability"}
+      {title: "Brand code", caption: "units with exact stock"},
+      {title: "Brands", caption: "catalog suppliers"},
+      {title: "Categories", caption: "catalog groups"},
+      {title: "Products", caption: "active catalog items"}
     ],
     hitsTag: "Product catalog",
     hitsTitle: "Products",
     allProducts: "All products",
     loading: "Loading catalog...",
     error: "Catalog failed to load. Demo products are shown.",
-    brandsTitle: "Brands in stock",
+    brandsTitle: "Companies in stock",
     brandsDescription: "Genuine and proven auto parts manufacturers.",
     orderSteps: [
       {title: "Select product", description: "Find by name, model, OEM, or category."},
@@ -192,24 +251,50 @@ const storeCopy: Record<
     description:
       "Мы продаем только автозапчасти: оригинал и качественные аналоги",
     searchPlaceholder: "Поиск по названию, OEM, brand code, модели или артикулу",
+    animatedPlaceholders: [
+      "Найти MANN FILTER C 35 154",
+      "Поиск по OEM: 06H115562",
+      "Поиск по модели: Toyota Camry",
+      "Поиск по категории: Фильтры"
+    ],
     searchButton: "Найти товар",
     searchLoading: "Поиск...",
     searchEmpty: "Подходящих товаров не найдено.",
     quickTitle: "Категории",
     quickDescription: "Категории сгруппированы по данным каталога с backend.",
     allCategories: "Все",
+    promoTag: "Реальное промо",
+    promoTitle: "Актуальные акции недели",
+    promoSubtitle: "Реальные предложения с ограниченным остатком и живой ценой.",
+    promoSlides: [
+      {
+        title: "Liqui Moly Top Tec 4200 5W-30 — скидка 15%",
+        description: "Недельная акция на моторное масло. Для части моделей доступна отправка в день заказа.",
+        action: "Смотреть масла"
+      },
+      {
+        title: "MANN FILTER набор 3+1",
+        description: "Покупаешь воздушный, масляный и салонный фильтр — один фильтр получаешь в подарок.",
+        action: "Смотреть фильтры"
+      },
+      {
+        title: "Brembo brake kit — бесплатная доставка",
+        description: "Комплекты диск + колодки с бесплатной доставкой по городу и быстрым оформлением.",
+        action: "Раздел тормозов"
+      }
+    ],
     highlights: [
-      {title: "Brand code", value: "12 000+", caption: "товаров на складе"},
-      {title: "Бренды", value: "95+", caption: "поставщиков в каталоге"},
-      {title: "Отгрузка", value: "24/7", caption: "обновление остатков"},
-      {title: "Склад", value: "Live", caption: "актуальные остатки"}
+      {title: "Brand code", caption: "точный остаток на складе"},
+      {title: "Бренды", caption: "поставщиков в каталоге"},
+      {title: "Категории", caption: "разделов каталога"},
+      {title: "Товары", caption: "активных позиций"}
     ],
     hitsTag: "Каталог товаров",
     hitsTitle: "Товары",
     allProducts: "Все товары",
     loading: "Загрузка каталога...",
     error: "Не удалось загрузить каталог. Показаны демонстрационные товары.",
-    brandsTitle: "Бренды в наличии",
+    brandsTitle: "Марки в наличии",
     brandsDescription: "Оригинальные и проверенные производители автозапчастей.",
     orderSteps: [
       {title: "Подбор товара", description: "Ищи по названию, OEM, brand code, модели или категории."},
@@ -236,6 +321,7 @@ type StorePageProps = {
 export default function StorePage({language, displayCurrency, currencyRates, onAddToCart}: StorePageProps) {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [catalogStats, setCatalogStats] = useState<ProductCatalogStats | null>(null);
   const [brandImages, setBrandImages] = useState<string[]>([]);
   const [categories, setCategories] = useState<ProductCategorySummary[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -250,9 +336,18 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [overallTotalElements, setOverallTotalElements] = useState(0);
+  const [searchSpotlight, setSearchSpotlight] = useState(true);
+  const [typedPlaceholder, setTypedPlaceholder] = useState("");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [isDeletingPlaceholder, setIsDeletingPlaceholder] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const searchRequestRef = useRef(0);
   const copy = storeCopy[language];
+  const placeholderPrototypes = useMemo(
+    () => buildPlaceholderPrototypes(copy.animatedPlaceholders, language, categories, products),
+    [copy.animatedPlaceholders, language, categories, products]
+  );
+  const isSearchInputEmpty = searchQuery.length === 0;
 
   useEffect(() => {
     void loadCatalogPage(0);
@@ -261,6 +356,10 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
   useEffect(() => {
     void loadBrandImages();
     void loadCategories();
+    void loadCatalogStats();
+
+    const spotlightTimer = window.setTimeout(() => setSearchSpotlight(false), 2600);
+    return () => window.clearTimeout(spotlightTimer);
   }, []);
 
   useEffect(() => {
@@ -308,6 +407,44 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
 
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setTypedPlaceholder("");
+    setPlaceholderIndex(0);
+    setIsDeletingPlaceholder(false);
+  }, [language]);
+
+  useEffect(() => {
+    if (!placeholderPrototypes.length) {
+      return;
+    }
+
+    const currentVariant = placeholderPrototypes[placeholderIndex % placeholderPrototypes.length] ?? copy.searchPlaceholder;
+    const typeSpeed = language === "ru" ? 48 : 44;
+    const deleteSpeed = 24;
+    const pauseAtEnd = 1150;
+
+    const timeout = window.setTimeout(() => {
+      if (!isDeletingPlaceholder) {
+        if (typedPlaceholder.length < currentVariant.length) {
+          setTypedPlaceholder(currentVariant.slice(0, typedPlaceholder.length + 1));
+          return;
+        }
+        setIsDeletingPlaceholder(true);
+        return;
+      }
+
+      if (typedPlaceholder.length > 0) {
+        setTypedPlaceholder(currentVariant.slice(0, typedPlaceholder.length - 1));
+        return;
+      }
+
+      setIsDeletingPlaceholder(false);
+      setPlaceholderIndex((prev) => (prev + 1) % placeholderPrototypes.length);
+    }, !isDeletingPlaceholder && typedPlaceholder.length === currentVariant.length ? pauseAtEnd : isDeletingPlaceholder ? deleteSpeed : typeSpeed);
+
+    return () => window.clearTimeout(timeout);
+  }, [typedPlaceholder, placeholderIndex, isDeletingPlaceholder, placeholderPrototypes, copy.searchPlaceholder, language]);
 
   async function loadCatalogPage(page: number) {
     try {
@@ -363,6 +500,15 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
     }
   }
 
+  async function loadCatalogStats() {
+    try {
+      const data = await fetchCatalogStats();
+      setCatalogStats(data);
+    } catch {
+      setCatalogStats(null);
+    }
+  }
+
   function openProduct(productId: number) {
     setSearchDropdownOpen(false);
     setSearchQuery("");
@@ -392,6 +538,9 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
 
   const mirroredBrandImages = useMemo(() => [...brandImages].reverse(), [brandImages]);
   const allProductsCount = useMemo(() => {
+    if (catalogStats) {
+      return Math.max(0, catalogStats.totalProducts);
+    }
     if (overallTotalElements > 0) {
       return overallTotalElements;
     }
@@ -400,7 +549,21 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
       return categoriesTotal;
     }
     return totalElements;
-  }, [overallTotalElements, categories, totalElements]);
+  }, [catalogStats, overallTotalElements, categories, totalElements]);
+
+  const highlights = useMemo(() => {
+    const values = [
+      formatCompactCount(catalogStats?.totalStockQuantity ?? 0, language),
+      formatCompactCount(catalogStats?.totalBrands ?? 0, language),
+      formatCompactCount(catalogStats?.totalCategories ?? 0, language),
+      formatCompactCount(catalogStats?.totalProducts ?? 0, language)
+    ];
+
+    return copy.highlights.map((item, index) => ({
+      ...item,
+      value: values[index] ?? "0"
+    }));
+  }, [catalogStats, copy.highlights, language]);
 
   return (
     <motion.section
@@ -411,67 +574,295 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
       transition={{duration: 0.35}}
       className="space-y-8 pb-10"
     >
-      <section id="catalog" className="relative z-20 scroll-mt-28">
-        <motion.article initial={{opacity: 0, y: 14}} animate={{opacity: 1, y: 0}} transition={{duration: 0.45}} className="glass-card rounded-2xl border border-brand-500/22 p-6 sm:p-8 lg:p-10">
-          <span className="inline-flex items-center rounded-md border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[18px] uppercase tracking-[0.20em] text-brand-200">
-            {copy.badge}
-          </span>
 
-          <p className="theme-text mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">{copy.description}</p>
+      <section id="catalog" className="relative z-20 scroll-mt-28">
+        <motion.article
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="glass-card rounded-2xl border border-brand-500/22 p-6 sm:p-8 lg:p-10"
+        >
+        <span className="inline-flex items-center rounded-md border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[18px] uppercase tracking-[0.20em] text-brand-200">
+          {copy.badge}
+        </span>
+
+          <p className="theme-text mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
+            {copy.description}
+          </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-[1fr,auto]">
-            <div ref={searchContainerRef} className="relative z-50 block">
-              <Search className="theme-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                onFocus={() => {
-                  if (searchResults.length > 0 || searchLoading) {
-                    setSearchDropdownOpen(true);
-                  }
-                }}
-                placeholder={copy.searchPlaceholder}
-                className="input-surface w-full rounded-xl border py-3 pl-10 pr-3 text-sm outline-none transition focus:border-brand-400/60"
+            <motion.div
+                ref={searchContainerRef}
+                className="group relative z-50 block rounded-[22px]"
+                initial={{ opacity: 0, y: 24, scale: 0.965, rotateX: 8 }}
+                animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -2, scale: 1.005 }}
+            >
+              <motion.div
+                  className="pointer-events-none absolute -inset-[1px] rounded-[24px] bg-gradient-to-r from-brand-500/20 via-white/10 to-brand-400/20 blur-xl"
+                  animate={{
+                    opacity: [0.35, 0.7, 0.35],
+                    scale: [1, 1.015, 1],
+                  }}
+                  transition={{
+                    duration: 3.2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
               />
 
-              {searchDropdownOpen && searchQuery.trim().length > 0 && (
-                <div className="glass-card absolute left-0 right-0 top-[calc(100%+8px)] z-[70] max-h-[32rem] overflow-y-auto rounded-xl border border-brand-500/30 p-2">
-                  {searchLoading && <p className="theme-muted px-2 py-2 text-xs">{copy.searchLoading}</p>}
-                  {!searchLoading && searchResults.length === 0 && <p className="theme-muted px-2 py-2 text-xs">{copy.searchEmpty}</p>}
-                  {!searchLoading &&
-                    searchResults.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => openProduct(item.id)}
-                        className="tile-surface flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-2 text-left transition hover:border-brand-400/40"
-                      >
-                        <span className="min-w-0">
-                          <span className="theme-heading block truncate text-sm">{item.name}</span>
-                          <span className="theme-muted block truncate text-xs">
-                            {item.sku} · {item.brand || "OEM"}
-                          </span>
-                        </span>
-                        <span className="ml-3 flex-shrink-0 text-xs font-medium text-brand-200">
-                          {formatConvertedPrice(item.price, displayCurrency, currencyRates, language)}
-                        </span>
-                      </button>
-                    ))}
-                </div>
+              <motion.div
+                  className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                  initial={{ x: "-130%", opacity: 0 }}
+                  animate={
+                    searchSpotlight
+                        ? { x: ["-130%", "130%"], opacity: [0, 0.9, 0] }
+                        : { x: "-130%", opacity: 0 }
+                  }
+                  transition={{
+                    duration: 1.35,
+                    ease: "easeInOut",
+                  }}
+              />
+
+              {searchSpotlight && (
+                  <>
+                    <motion.span
+                        className="pointer-events-none absolute -inset-1 rounded-[24px] border border-brand-400/50"
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{
+                          opacity: [0, 0.8, 0],
+                          scale: [0.96, 1.02, 1.045],
+                        }}
+                        transition={{ duration: 1.5, ease: "easeOut" }}
+                    />
+                  </>
               )}
-            </div>
+
+              <div className="relative overflow-hidden rounded-[22px]">
+                <motion.div
+                    className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-brand-500/10 via-brand-400/5 to-transparent"
+                    animate={{
+                      opacity: [0.5, 0.85, 0.5],
+                    }}
+                    transition={{
+                      duration: 2.4,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                />
+
+                <motion.div
+                    initial={{ opacity: 0, x: -10, scale: 0.85 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    transition={{ delay: 0.18, duration: 0.45, ease: "easeOut" }}
+                    className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2"
+                >
+                  <motion.div
+                      animate={{
+                        rotate: [0, -10, 10, 0],
+                        scale: [1, 1.12, 1],
+                      }}
+                      transition={{
+                        duration: 1.8,
+                        repeat: Infinity,
+                        repeatDelay: 4,
+                        ease: "easeInOut",
+                      }}
+                  >
+                    <Search className="theme-muted h-[16px] w-[16px]" />
+                  </motion.div>
+                </motion.div>
+
+                {!searchQuery && (
+                    <div className="pointer-events-none absolute inset-y-0 left-11 right-4 z-[2] flex items-center">
+                    <span className="theme-muted truncate text-sm">
+                      {typedPlaceholder}
+                      <motion.span
+                          className="ml-0.5 inline-block h-[1em] w-[1px] bg-current align-middle"
+                          animate={{ opacity: [1, 0, 1] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                    </span>
+                    </div>
+                )}
+
+                <motion.input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onFocus={() => {
+                      if (searchResults.length > 0 || searchLoading) {
+                        setSearchDropdownOpen(true);
+                      }
+                    }}
+                    placeholder=""
+                    initial={{
+                      boxShadow: "0 0 0 rgba(0,0,0,0)",
+                      backgroundPosition: "0% 50%",
+                    }}
+                    animate={
+                      searchSpotlight
+                          ? {
+                            boxShadow: [
+                              "0 0 0 rgba(0,0,0,0)",
+                              "0 0 0 3px rgba(99,102,241,0.14)",
+                              "0 0 22px rgba(59,130,246,0.18)",
+                              "0 0 0 rgba(0,0,0,0)",
+                            ],
+                          }
+                          : {
+                            boxShadow: "0 0 0 rgba(0,0,0,0)",
+                          }
+                    }
+                    transition={{
+                      duration: searchSpotlight ? 1.25 : 0.25,
+                      ease: "easeInOut",
+                    }}
+                    className="input-surface relative z-[1] w-full rounded-[22px] border border-white/10 bg-white/[0.04] py-3.5 pl-11 pr-4 text-sm  outline-none transition duration-300  focus:border-brand-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+
+              {searchDropdownOpen && searchQuery.trim().length > 0 && (
+                  <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.96, filter: "blur(8px)" }}
+                      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                      className="glass-card absolute left-0 right-0 top-[calc(100%+10px)] z-[70] max-h-[32rem] overflow-y-auto rounded-2xl border border-brand-500/30 p-2 shadow-2xl shadow-brand-950/20"
+                  >
+                    {searchLoading && (
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="theme-muted px-3 py-3 text-xs"
+                        >
+                          {copy.searchLoading}
+                        </motion.p>
+                    )}
+
+                    {!searchLoading && searchResults.length === 0 && (
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="theme-muted px-3 py-3 text-xs"
+                        >
+                          {copy.searchEmpty}
+                        </motion.p>
+                    )}
+
+                    {!searchLoading &&
+                        searchResults.map((item, index) => (
+                            <motion.button
+                                key={item.id}
+                                type="button"
+                                onClick={() => openProduct(item.id)}
+                                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{
+                                  delay: index * 0.04,
+                                  duration: 0.24,
+                                  ease: [0.22, 1, 0.36, 1],
+                                }}
+                                whileHover={{ x: 4, scale: 1.01 }}
+                                whileTap={{ scale: 0.985 }}
+                                className="tile-surface group/item flex w-full items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition hover:border-brand-400/40 hover:bg-white/[0.04]"
+                            >
+                  <span className="min-w-0">
+                    <span className="theme-heading block truncate text-sm transition group-hover/item:text-brand-100">
+                      {item.name}
+                    </span>
+                    <span className="theme-muted block truncate text-xs">
+                      {item.sku} · {item.brand || "OEM"}
+                    </span>
+                  </span>
+
+                              <motion.span
+                                  className="ml-3 flex-shrink-0 text-xs font-medium text-brand-200"
+                                  whileHover={{ scale: 1.06 }}
+                              >
+                                {formatConvertedPrice(item.price, displayCurrency, currencyRates, language)}
+                              </motion.span>
+                            </motion.button>
+                        ))}
+                  </motion.div>
+              )}
+            </motion.div>
+
             <motion.button
-              whileHover={{y: -1}}
-              whileTap={{scale: 0.98}}
-              type="button"
-              onClick={applySearchFilter}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-3 text-sm font-medium text-white"
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.18, duration: 0.45 }}
+                type="button"
+                onClick={applySearchFilter}
+                className="relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-3 text-sm font-medium text-white"
             >
-              {copy.searchButton}
-              <ArrowRight className="h-4 w-4" />
+              <motion.span
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                  initial={{ x: "-120%" }}
+                  whileHover={{ x: "120%" }}
+                  transition={{ duration: 0.7, ease: "easeInOut" }}
+              />
+              <span className="relative z-10">{copy.searchButton}</span>
+              <motion.div
+                  className="relative z-10"
+                  whileHover={{ x: 3 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              >
+                <ArrowRight className="h-4 w-4" />
+              </motion.div>
             </motion.button>
           </div>
         </motion.article>
+      </section>
+
+
+      <section id="promo" className="relative z-10 scroll-mt-28">
+        <motion.div
+          initial={{opacity: 0, y: 12}}
+          whileInView={{opacity: 1, y: 0}}
+          viewport={{once: true, amount: 0.2}}
+          transition={{duration: 0.4}}
+          className="glass-card rounded-2xl border border-brand-500/22 p-4 sm:p-6"
+        >
+          <p className="text-xs uppercase tracking-[0.18em] text-brand-300">{copy.promoTag}</p>
+          <h3 className="theme-heading mt-1 text-xl font-semibold sm:text-2xl">{copy.promoTitle}</h3>
+          <p className="theme-text mt-1 text-sm">{copy.promoSubtitle}</p>
+
+          <Swiper
+            modules={[Autoplay, Pagination]}
+            className="promo-swiper mt-4"
+            slidesPerView={1}
+            spaceBetween={12}
+            loop={copy.promoSlides.length > 1}
+            autoplay={{delay: 4200, disableOnInteraction: false, pauseOnMouseEnter: true}}
+            pagination={{clickable: true}}
+          >
+            {copy.promoSlides.map((slide, index) => (
+              <SwiperSlide key={`${slide.title}-${index}`}>
+                <motion.article
+                  whileHover={{y: -2}}
+                  className="relative overflow-hidden rounded-xl border border-brand-500/35 bg-gradient-to-br from-brand-600/20 via-brand-500/10 to-black/10 p-5 sm:p-7"
+                >
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-brand-500/25 blur-2xl" />
+                  <div className="pointer-events-none absolute -bottom-14 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-brand-300/20 blur-2xl" />
+                  <p className="theme-heading text-lg font-semibold sm:text-2xl">{slide.title}</p>
+                  <p className="theme-text mt-2 max-w-2xl text-sm sm:text-base">{slide.description}</p>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("categories")?.scrollIntoView({behavior: "smooth", block: "start"})}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-brand-400/45 bg-brand-500/15 px-3 py-2 text-sm font-medium text-brand-100 transition hover:border-brand-300 hover:bg-brand-500/25"
+                  >
+                    {slide.action}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </motion.article>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </motion.div>
       </section>
 
       <section id="categories" className="relative z-10 scroll-mt-28">
@@ -586,7 +977,7 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {copy.highlights.map((item, index) => {
+        {highlights.map((item, index) => {
           const Icon = highlightIcons[index] ?? Boxes;
           return (
             <motion.article
@@ -637,27 +1028,31 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
 
         {!hasError && totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-center gap-2">
+
             <button
-              type="button"
-              onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage === 0}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
+                type="button"
+                onClick={() => changePage(currentPage - 1)}
+                disabled={currentPage === 0}
+                className="group inline-flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-100 transition-all duration-200 hover:bg-brand-500/20 hover:border-brand-400 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
               {copy.pagination.prev}
             </button>
-            <span className="theme-text rounded-lg border border-white/10 px-3 py-1.5 text-xs">
+
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
               {copy.pagination.page} {currentPage + 1} {copy.pagination.of} {totalPages}
-            </span>
+            </div>
+
             <button
-              type="button"
-              onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage + 1 >= totalPages}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
+                type="button"
+                onClick={() => changePage(currentPage + 1)}
+                disabled={currentPage + 1 >= totalPages}
+                className="group inline-flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-100 transition-all duration-200 hover:bg-brand-500/20 hover:border-brand-400 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {copy.pagination.next}
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
+
           </div>
         )}
       </section>
@@ -714,6 +1109,41 @@ function CategoryCard({title, subtitle, icon: Icon, onClick, active}: CategoryCa
       <p className="theme-muted mt-1 line-clamp-2 text-xs leading-relaxed">{subtitle}</p>
     </motion.button>
   );
+}
+
+function formatCompactCount(value: number, language: Language) {
+  return new Intl.NumberFormat(language, {
+    notation: "compact",
+    compactDisplay: "short",
+    maximumFractionDigits: 1
+  }).format(Math.max(0, value));
+}
+
+function buildPlaceholderPrototypes(
+  basePlaceholders: string[],
+  language: Language,
+  categories: ProductCategorySummary[],
+  products: Product[]
+) {
+  const localizedCategoryPrefix = language === "ru" ? "Категория:" : language === "en" ? "Category:" : "Kateqoriya:";
+  const localizedBrandPrefix = language === "ru" ? "Бренд:" : language === "en" ? "Brand:" : "Brend:";
+  const localizedSkuPrefix = language === "ru" ? "Brand code:" : language === "en" ? "Brand code:" : "Brand code:";
+
+  const categorySamples = categories
+    .slice(0, 2)
+    .map((category) => `${localizedCategoryPrefix} ${category.name}`);
+  const productSamples = products
+    .slice(0, 2)
+    .map((product) => {
+      const brandLabel = product.brand?.trim() || "OEM";
+      return `${localizedBrandPrefix} ${brandLabel} · ${localizedSkuPrefix} ${product.sku}`;
+    });
+
+  const merged = [...basePlaceholders, ...categorySamples, ...productSamples]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return Array.from(new Set(merged));
 }
 
 function resolveCategoryIcon(categoryName: string, fallbackIndex: number) {

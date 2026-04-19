@@ -9,7 +9,6 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -46,15 +45,20 @@ public class AdminOrderWorkflowService {
         }
 
         ensureTransitionAllowed(previousStatus, targetStatus);
-        if (previousStatus == OrderStatus.PENDING && targetStatus == OrderStatus.PROCESSING) {
+
+        boolean invoiceRequired = previousStatus == OrderStatus.PENDING && targetStatus == OrderStatus.COMPLETED;
+        if (invoiceRequired) {
             reserveStockForOrder(order);
-            sendInvoiceEmail(order);
         }
 
         order.setStatus(targetStatus);
         appendAdminNote(order, targetStatus, note);
         orderRecordRepository.save(order);
+
         sendOrderStatusChangedEmail(order, previousStatus, targetStatus, note);
+        if (invoiceRequired) {
+            sendInvoiceEmail(order);
+        }
     }
 
     private void reserveStockForOrder(OrderRecord order) {
@@ -126,9 +130,10 @@ public class AdminOrderWorkflowService {
             return;
         }
 
+        String language = resolveLanguage(order.getCustomerLanguage());
         String appName = resolveAppName();
-        String subject = appName + " Invoice " + order.getInvoiceNumber();
-        String html = buildInvoiceHtml(order, appName);
+        String subject = localizedInvoiceSubject(language, appName, order.getInvoiceNumber());
+        String html = buildInvoiceHtml(order, appName, language);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -158,32 +163,38 @@ public class AdminOrderWorkflowService {
             return;
         }
 
+        String language = resolveLanguage(order.getCustomerLanguage());
         String appName = resolveAppName();
-        String noteText = hasText(note) ? "\nAdmin note: " + note.trim() : "";
-        String text = """
-                Order status has been updated.
+        String previousLabel = localizedStatus(language, previousStatus);
+        String nextLabel = localizedStatus(language, targetStatus);
+        String normalizedNote = hasText(note) ? note.trim() : null;
 
-                Invoice: %s
-                Previous status: %s
-                New status: %s%s
-
-                Thank you for using %s.
-                """.formatted(
-                order.getInvoiceNumber(),
-                previousStatus.name(),
-                targetStatus.name(),
-                noteText,
-                appName
-        );
+        String subject;
+        String html;
+        switch (language) {
+            case "ru" -> {
+                subject = appName + " — Статус заказа обновлён " + order.getInvoiceNumber();
+                html = buildStatusChangedHtml(order, language, appName, previousLabel, nextLabel, normalizedNote);
+            }
+            case "en" -> {
+                subject = appName + " — Order status update " + order.getInvoiceNumber();
+                html = buildStatusChangedHtml(order, language, appName, previousLabel, nextLabel, normalizedNote);
+            }
+            default -> {
+                subject = appName + " — Sifariş statusu yeniləndi " + order.getInvoiceNumber();
+                html = buildStatusChangedHtml(order, language, appName, previousLabel, nextLabel, normalizedNote);
+            }
+        }
 
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(toEmail);
-            message.setFrom(resolveFrom());
-            message.setSubject(appName + " — order " + order.getInvoiceNumber() + " status update");
-            message.setText(text);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(resolveFrom());
+            helper.setSubject(subject);
+            helper.setText(html, true);
             mailSender.send(message);
-        } catch (MailException exception) {
+        } catch (MessagingException | MailException exception) {
             throw new IllegalStateException("Order status updated, but notification email delivery failed.", exception);
         }
     }
@@ -207,8 +218,8 @@ public class AdminOrderWorkflowService {
 
     private void ensureTransitionAllowed(OrderStatus currentStatus, OrderStatus nextStatus) {
         boolean allowed = switch (currentStatus) {
-            case PENDING -> nextStatus == OrderStatus.PROCESSING || nextStatus == OrderStatus.CANCELLED;
-            case PROCESSING -> nextStatus == OrderStatus.SHIPPED || nextStatus == OrderStatus.CANCELLED || nextStatus == OrderStatus.COMPLETED;
+            case PENDING -> nextStatus == OrderStatus.COMPLETED || nextStatus == OrderStatus.CANCELLED;
+            case PROCESSING -> nextStatus == OrderStatus.COMPLETED || nextStatus == OrderStatus.CANCELLED;
             case SHIPPED -> nextStatus == OrderStatus.COMPLETED || nextStatus == OrderStatus.CANCELLED;
             case COMPLETED -> false;
             case PARTIALLY_RETURNED -> nextStatus == OrderStatus.RETURNED;
@@ -220,7 +231,7 @@ public class AdminOrderWorkflowService {
         }
     }
 
-    private String buildInvoiceHtml(OrderRecord order, String appName) {
+    private String buildInvoiceHtml(OrderRecord order, String appName, String language) {
         String rows = order.getItems().stream()
                 .map(item -> {
                     Product product = item.getProduct();
@@ -251,6 +262,64 @@ public class AdminOrderWorkflowService {
         String country = userInfo != null ? userInfo.getCountry() : order.getUser().getCountry();
         String postalCode = userInfo != null ? userInfo.getPostalCode() : order.getUser().getPostalCode();
 
+        String title;
+        String customerLabel;
+        String emailLabel;
+        String phoneLabel;
+        String addressLabel;
+        String locationLabel;
+        String productLabel;
+        String codeLabel;
+        String qtyLabel;
+        String unitLabel;
+        String totalLabel;
+        String grandTotalLabel;
+
+        switch (language) {
+            case "ru" -> {
+                title = "Инвойс";
+                customerLabel = "Клиент";
+                emailLabel = "Email";
+                phoneLabel = "Телефон";
+                addressLabel = "Адрес";
+                locationLabel = "Локация";
+                productLabel = "Товар";
+                codeLabel = "Brand code";
+                qtyLabel = "Кол-во";
+                unitLabel = "Цена";
+                totalLabel = "Сумма";
+                grandTotalLabel = "Итог";
+            }
+            case "en" -> {
+                title = "Invoice";
+                customerLabel = "Customer";
+                emailLabel = "Email";
+                phoneLabel = "Phone";
+                addressLabel = "Address";
+                locationLabel = "Location";
+                productLabel = "Product";
+                codeLabel = "Brand code";
+                qtyLabel = "Qty";
+                unitLabel = "Unit";
+                totalLabel = "Total";
+                grandTotalLabel = "Grand Total";
+            }
+            default -> {
+                title = "İnvoice";
+                customerLabel = "Müştəri";
+                emailLabel = "Email";
+                phoneLabel = "Telefon";
+                addressLabel = "Ünvan";
+                locationLabel = "Məkan";
+                productLabel = "Məhsul";
+                codeLabel = "Brand code";
+                qtyLabel = "Say";
+                unitLabel = "Qiymət";
+                totalLabel = "Cəm";
+                grandTotalLabel = "Yekun";
+            }
+        }
+
         String commentBlock = hasText(order.getComment())
                 ? "<p style=\"margin:14px 0 0;font-size:14px;color:#334155;\"><strong>Comment:</strong> " + escapeHtml(order.getComment()) + "</p>"
                 : "";
@@ -261,26 +330,26 @@ public class AdminOrderWorkflowService {
                 <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#0f172a;">
                   <div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
                     <div style="padding:20px 24px;background:#111827;color:#f9fafb;">
-                      <h1 style="margin:0;font-size:22px;">%s — Invoice</h1>
-                      <p style="margin:8px 0 0;font-size:13px;color:#cbd5e1;">Invoice #%s · %s</p>
+                      <h1 style="margin:0;font-size:22px;">%s — %s</h1>
+                      <p style="margin:8px 0 0;font-size:13px;color:#cbd5e1;">#%s · %s</p>
                     </div>
                     <div style="padding:22px 24px;">
-                      <p style="margin:0 0 10px;font-size:14px;"><strong>Customer:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Email:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Phone:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Address:</strong> %s</p>
-                      <p style="margin:0 0 0;font-size:14px;"><strong>Location:</strong> %s, %s %s</p>
+                      <p style="margin:0 0 10px;font-size:14px;"><strong>%s:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>%s:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>%s:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>%s:</strong> %s</p>
+                      <p style="margin:0 0 0;font-size:14px;"><strong>%s:</strong> %s, %s %s</p>
                       %s
                     </div>
                     <div style="padding:0 24px 16px;">
                       <table style="width:100%%;border-collapse:collapse;font-size:14px;">
                         <thead>
                           <tr style="background:#f8fafc;color:#334155;">
-                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Product</th>
-                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Brand code</th>
-                            <th style="text-align:center;padding:10px;border-bottom:1px solid #e2e8f0;">Qty</th>
-                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Unit</th>
-                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Total</th>
+                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">%s</th>
+                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">%s</th>
+                            <th style="text-align:center;padding:10px;border-bottom:1px solid #e2e8f0;">%s</th>
+                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">%s</th>
+                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">%s</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -289,7 +358,7 @@ public class AdminOrderWorkflowService {
                       </table>
                     </div>
                     <div style="padding:14px 24px 24px;text-align:right;">
-                      <p style="margin:0;font-size:13px;color:#64748b;">Grand Total</p>
+                      <p style="margin:0;font-size:13px;color:#64748b;">%s</p>
                       <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#dc2626;">%s AZN</p>
                     </div>
                   </div>
@@ -297,18 +366,179 @@ public class AdminOrderWorkflowService {
                 </html>
                 """.formatted(
                 escapeHtml(appName),
+                title,
                 escapeHtml(order.getInvoiceNumber()),
                 order.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
+                customerLabel,
                 escapeHtml(order.getUser().getFullName()),
+                emailLabel,
                 escapeHtml(resolveCustomerEmail(order)),
+                phoneLabel,
                 escapeHtml(phone),
+                addressLabel,
                 escapeHtml(address),
+                locationLabel,
                 escapeHtml(city),
                 escapeHtml(country),
                 escapeHtml(postalCode == null ? "" : postalCode),
                 commentBlock,
+                productLabel,
+                codeLabel,
+                qtyLabel,
+                unitLabel,
+                totalLabel,
                 rows,
+                grandTotalLabel,
                 formatMoney(order.getTotalAmount())
+        );
+    }
+
+    private String localizedInvoiceSubject(String language, String appName, String invoiceNumber) {
+        return switch (language) {
+            case "ru" -> appName + " — Инвойс " + invoiceNumber;
+            case "en" -> appName + " — Invoice " + invoiceNumber;
+            default -> appName + " — İnvoice " + invoiceNumber;
+        };
+    }
+
+    private String localizedStatus(String language, OrderStatus status) {
+        return switch (language) {
+            case "ru" -> switch (status) {
+                case PENDING -> "Ожидает";
+                case PROCESSING -> "В обработке";
+                case SHIPPED -> "Отправлен";
+                case COMPLETED -> "Принят";
+                case PARTIALLY_RETURNED -> "Частичный возврат";
+                case CANCELLED -> "Отменен";
+                case RETURNED -> "Возврат";
+            };
+            case "en" -> switch (status) {
+                case PENDING -> "Pending";
+                case PROCESSING -> "Processing";
+                case SHIPPED -> "Shipped";
+                case COMPLETED -> "Accepted";
+                case PARTIALLY_RETURNED -> "Partially returned";
+                case CANCELLED -> "Cancelled";
+                case RETURNED -> "Returned";
+            };
+            default -> switch (status) {
+                case PENDING -> "Gözləmədə";
+                case PROCESSING -> "İcrada";
+                case SHIPPED -> "Yoldadır";
+                case COMPLETED -> "Qəbul edildi";
+                case PARTIALLY_RETURNED -> "Qismən geri qaytarılıb";
+                case CANCELLED -> "Ləğv edildi";
+                case RETURNED -> "Geri qaytarıldı";
+            };
+        };
+    }
+
+    private String buildStatusChangedHtml(
+            OrderRecord order,
+            String language,
+            String appName,
+            String previousLabel,
+            String nextLabel,
+            String note
+    ) {
+        String title;
+        String lead;
+        String orderLabel;
+        String previousLabelTitle;
+        String nextLabelTitle;
+        String noteLabel;
+        String footer;
+
+        switch (language) {
+            case "ru" -> {
+                title = "Статус заказа обновлён";
+                lead = "Ваш заказ обновлён.";
+                orderLabel = "Номер заказа";
+                previousLabelTitle = "Предыдущий статус";
+                nextLabelTitle = "Новый статус";
+                noteLabel = "Комментарий администратора";
+                footer = "Если есть вопросы, пожалуйста свяжитесь с поддержкой.";
+            }
+            case "en" -> {
+                title = "Order status updated";
+                lead = "Your order has been updated.";
+                orderLabel = "Order number";
+                previousLabelTitle = "Previous status";
+                nextLabelTitle = "New status";
+                noteLabel = "Admin note";
+                footer = "If you have questions, please contact support.";
+            }
+            default -> {
+                title = "Sifariş statusu yeniləndi";
+                lead = "Sifarişiniz yeniləndi.";
+                orderLabel = "Sifariş nömrəsi";
+                previousLabelTitle = "Əvvəlki status";
+                nextLabelTitle = "Yeni status";
+                noteLabel = "Admin qeydi";
+                footer = "Suallarınız varsa, dəstək xidməti ilə əlaqə saxlayın.";
+            }
+        }
+
+        String noteBlock = hasText(note)
+                ? """
+                        <tr>
+                          <td style="padding:12px 16px;border-top:1px solid #e5e7eb;background:#f8fafc;"><strong>%s</strong></td>
+                          <td style="padding:12px 16px;border-top:1px solid #e5e7eb;background:#f8fafc;">%s</td>
+                        </tr>
+                        """.formatted(escapeHtml(noteLabel), escapeHtml(note))
+                : "";
+
+        return """
+                <!doctype html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                </head>
+                <body style="margin:0;padding:18px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
+                  <table role="presentation" style="width:100%%;max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;border-collapse:separate;">
+                    <tr>
+                      <td style="padding:18px 20px;background:#111827;color:#f9fafb;">
+                        <div style="font-size:20px;font-weight:700;">%s</div>
+                        <div style="margin-top:6px;font-size:13px;color:#d1d5db;">%s</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:18px 20px;">
+                        <p style="margin:0 0 12px;font-size:14px;">%s</p>
+                        <table role="presentation" style="width:100%%;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-collapse:separate;">
+                          <tr>
+                            <td style="padding:12px 16px;background:#f8fafc;"><strong>%s</strong></td>
+                            <td style="padding:12px 16px;background:#f8fafc;">%s</td>
+                          </tr>
+                          <tr>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;"><strong>%s</strong></td>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;">%s</td>
+                          </tr>
+                          <tr>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;"><strong>%s</strong></td>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;">%s</td>
+                          </tr>
+                          %s
+                        </table>
+                        <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">%s</p>
+                      </td>
+                    </tr>
+                  </table>
+                </body>
+                </html>
+                """.formatted(
+                escapeHtml(appName),
+                escapeHtml(title),
+                escapeHtml(lead),
+                escapeHtml(orderLabel),
+                escapeHtml(order.getInvoiceNumber()),
+                escapeHtml(previousLabelTitle),
+                escapeHtml(previousLabel),
+                escapeHtml(nextLabelTitle),
+                escapeHtml(nextLabel),
+                noteBlock,
+                escapeHtml(footer)
         );
     }
 
@@ -349,6 +579,18 @@ public class AdminOrderWorkflowService {
     private boolean isMailEnabled() {
         AppProperties.Mail mail = appProperties.mail();
         return mail == null || mail.enabled();
+    }
+
+    private String resolveLanguage(String value) {
+        if (!hasText(value)) {
+            return "az";
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "ru", "ru-ru", "russian" -> "ru";
+            case "en", "en-us", "en-gb", "english" -> "en";
+            default -> "az";
+        };
     }
 
     private String formatMoney(BigDecimal value) {

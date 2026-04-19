@@ -2,6 +2,7 @@ package com.richstok.warehouse.product;
 
 import com.richstok.warehouse.common.dto.PageResponse;
 import com.richstok.warehouse.product.dto.CatalogCategoryResponse;
+import com.richstok.warehouse.product.dto.CatalogStatsResponse;
 import  com.richstok.warehouse.product.dto.ProductResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +38,11 @@ public class CatalogController {
     @GetMapping("/categories")
     public List<CatalogCategoryResponse> getCategories() {
         return productService.getCatalogCategories();
+    }
+
+    @GetMapping("/stats")
+    public CatalogStatsResponse getStats() {
+        return productService.getCatalogStats();
     }
 
     @GetMapping("/search")

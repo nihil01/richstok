@@ -40,6 +40,7 @@ export type CheckoutPayload = {
   postalCode?: string;
   country?: string;
   comment?: string;
+  language?: string;
   items?: CheckoutItemPayload[];
 };
 

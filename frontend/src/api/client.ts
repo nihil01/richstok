@@ -1,5 +1,12 @@
 import axios from "axios";
-import type {PageResponse, Product, ProductBulkImportResponse, ProductCategorySummary, ProductPayload} from "@/types/product";
+import type {
+  PageResponse,
+  Product,
+  ProductBulkImportResponse,
+  ProductCatalogStats,
+  ProductCategorySummary,
+  ProductPayload
+} from "@/types/product";
 import type {
   AccountProfile,
   AccountProfilePayload,
@@ -78,6 +85,11 @@ export async function fetchCatalogProductsPage(params: {
 
 export async function fetchCatalogCategories() {
   const {data} = await api.get<ProductCategorySummary[]>("/catalog/products/categories");
+  return data;
+}
+
+export async function fetchCatalogStats() {
+  const {data} = await api.get<ProductCatalogStats>("/catalog/products/stats");
   return data;
 }
 

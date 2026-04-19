@@ -16,6 +16,7 @@ public record CheckoutRequest(
         @Size(max = 40) String postalCode,
         @Size(max = 120) String country,
         @Size(max = 500) String comment,
+        @Size(max = 8) String language,
         @Valid List<CheckoutItemRequest> items
 ) {
 }

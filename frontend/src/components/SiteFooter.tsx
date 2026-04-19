@@ -75,9 +75,8 @@ export default function SiteFooter({language, baseCode, rates}: SiteFooterProps)
   const normalizedBaseCode = baseCode?.trim().toUpperCase() || "AZN";
 
   const rateRows = [
-    {code: normalizedBaseCode, value: 1},
-    {code: "USD", value: resolveRate(rates, "USD")},
-    {code: "EUR", value: resolveRate(rates, "EUR")}
+    {code: "USD", value: resolveAznPerCurrency(normalizedBaseCode, rates, "USD")},
+    {code: "EUR", value: resolveAznPerCurrency(normalizedBaseCode, rates, "EUR")}
   ];
 
   return (
@@ -121,8 +120,8 @@ export default function SiteFooter({language, baseCode, rates}: SiteFooterProps)
             <div className="mt-2 flex flex-wrap gap-2">
               {rateRows.map((row) => (
                 <span key={row.code} className="inline-flex items-center gap-1 rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[11px] text-brand-100">
-                  <span className="font-semibold">{row.code}</span>
-                  <span className="theme-text">{formatRate(row.value, locale)}</span>
+                  <span className="font-semibold">1 {row.code}</span>
+                  <span className="theme-text">= {formatRate(row.value, locale)} AZN</span>
                 </span>
               ))}
             </div>
@@ -162,18 +161,27 @@ export default function SiteFooter({language, baseCode, rates}: SiteFooterProps)
   );
 }
 
-function resolveRate(rates: Record<string, number>, code: string): number {
-  const value = rates[code];
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
+function resolveAznPerCurrency(baseCode: string, rates: Record<string, number>, currencyCode: "USD" | "EUR"): number {
+  const normalizedBaseCode = baseCode.trim().toUpperCase();
+  const normalizedCurrencyCode = currencyCode.trim().toUpperCase();
+  const rateToAzn = normalizedBaseCode === "AZN" ? 1 : normalizePositiveRate(rates["AZN"]);
+  const rateToCurrency = normalizedBaseCode === normalizedCurrencyCode ? 1 : normalizePositiveRate(rates[normalizedCurrencyCode]);
+
+  if (rateToAzn && rateToCurrency) {
+    return rateToAzn / rateToCurrency;
   }
-  if (code === "USD") {
-    return 0.5882;
+
+  if (normalizedCurrencyCode === "USD") {
+    return 1 / 0.5882;
   }
-  if (code === "EUR") {
-    return 0.5093;
+  return 1 / 0.5093;
+}
+
+function normalizePositiveRate(value: number | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
   }
-  return 1;
+  return value;
 }
 
 function formatRate(value: number, locale: string): string {

@@ -6,7 +6,7 @@ import type {Product, ProductBulkImportResponse, ProductPayload, StockState} fro
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {BarChart3, Boxes, ChevronLeft, ChevronRight, CircleDollarSign, FileSpreadsheet, ImagePlus, Pencil, Search, Shield, Trash2, UploadCloud, X} from "lucide-react";
+import {BarChart3, Boxes, CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, FileSpreadsheet, ImagePlus, Pencil, Search, Shield, Trash2, UploadCloud, X} from "lucide-react";
 import type {ChangeEvent, ComponentType, FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
@@ -29,7 +29,7 @@ const initialForm: ProductPayload = {
 };
 
 const PRODUCTS_PER_PAGE = 20;
-type AdminTab = "catalog" | "orders" | "users";
+type AdminTab = "catalog" | "orders" | "orderManagement" | "users";
 
 const adminCopy: Record<
   Language,
@@ -103,6 +103,7 @@ const adminCopy: Record<
     tabs: {
       catalog: "Kataloq",
       orders: "Sifariş hesabatı",
+      orderManagement: "Sifariş idarəetməsi",
       users: "İstifadəçilər"
     },
     formTitle: "Məhsul əlavə et",
@@ -182,6 +183,7 @@ const adminCopy: Record<
     tabs: {
       catalog: "Catalog",
       orders: "Orders report",
+      orderManagement: "Order management",
       users: "Users"
     },
     formTitle: "Add product",
@@ -261,6 +263,7 @@ const adminCopy: Record<
     tabs: {
       catalog: "Каталог",
       orders: "Отчет по заказам",
+      orderManagement: "Управление заказами",
       users: "Пользователи"
     },
     formTitle: "Добавить товар",
@@ -335,6 +338,7 @@ const adminCopy: Record<
 const adminTabs: Array<{id: AdminTab; icon: typeof Boxes}> = [
   {id: "catalog", icon: Boxes},
   {id: "orders", icon: BarChart3},
+  {id: "orderManagement", icon: CheckCircle2},
   {id: "users", icon: Shield}
 ];
 
@@ -537,7 +541,7 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
       </div>
 
       <section className="glass-card rounded-2xl p-3">
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-4">
           {adminTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -830,19 +834,19 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                           type="button"
                           onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                           disabled={currentPage <= 1}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-sm theme-text transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                         >
                           <ChevronLeft className="h-4 w-4" />
                           {copy.pagination.prev}
                         </button>
-                        <p className="theme-text text-sm">
+                        <p className="rounded-xl border border-white/12 bg-brand-500/8 px-3 py-2 text-xs font-medium theme-text">
                           {copy.pagination.page} {currentPage} / {totalPages}
                         </p>
                         <button
                           type="button"
                           onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                           disabled={currentPage >= totalPages}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-sm theme-text transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                         >
                           {copy.pagination.next}
                           <ChevronRight className="h-4 w-4" />
@@ -864,7 +868,19 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
             exit={{opacity: 0, y: -8}}
             transition={{duration: 0.25}}
           >
-            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
+            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} mode="report" />
+          </motion.section>
+        )}
+
+        {activeTab === "orderManagement" && (
+          <motion.section
+            key="admin-tab-orders-management"
+            initial={{opacity: 0, y: 8}}
+            animate={{opacity: 1, y: 0}}
+            exit={{opacity: 0, y: -8}}
+            transition={{duration: 0.25}}
+          >
+            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} mode="management" />
           </motion.section>
         )}
 

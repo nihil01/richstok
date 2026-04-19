@@ -62,7 +62,7 @@ services:
       SPRING_WEB_RESOURCES_STATIC_LOCATIONS: file:/app/static/,classpath:/static/
 
       # ===== CORS =====
-      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+      ALLOWED_ORIGINS: https://richstok.com,https://b4b.richstok.com
 
       # ===== SECURITY =====
       JWT_SECRET: UmljaHN0b2stU3BhcmstU2VjdXJlLUpXVC1LZXktMjAyNg==

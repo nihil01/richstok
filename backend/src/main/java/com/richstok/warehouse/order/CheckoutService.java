@@ -52,6 +52,7 @@ public class CheckoutService {
         if (orderLines.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty.");
         }
+
         CustomerProfile customer = resolveCustomerProfile(request, user, userInfo);
         validateCustomer(customer);
         UserInfo savedUserInfo = persistCustomerProfile(user, customer, userInfo);
@@ -63,7 +64,19 @@ public class CheckoutService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         int itemCount = orderLines.stream().mapToInt(OrderLine::quantity).sum();
 
-        persistPendingOrder(invoiceNumber, user, savedUserInfo, customer, total, itemCount, orderLines);
+        String customerLanguage = normalizeUiLanguage(request.language());
+        OrderRecord orderRecord = persistPendingOrder(
+                invoiceNumber,
+                user,
+                savedUserInfo,
+                customer,
+                total,
+                itemCount,
+                orderLines,
+                customerLanguage
+        );
+
+        sendPendingOrderPlacedEmail(orderRecord, customer.email());
         cartService.clearCartByUserId(user.getId());
 
         return new CheckoutResponse(
@@ -75,14 +88,15 @@ public class CheckoutService {
         );
     }
 
-    private void persistPendingOrder(
+    private OrderRecord persistPendingOrder(
             String invoiceNumber,
             AppUser user,
             UserInfo userInfo,
             CustomerProfile customer,
             BigDecimal total,
             int itemCount,
-            List<OrderLine> lines
+            List<OrderLine> lines,
+            String customerLanguage
     ) {
         OrderRecord orderRecord = new OrderRecord();
         orderRecord.setInvoiceNumber(invoiceNumber);
@@ -93,6 +107,7 @@ public class CheckoutService {
         orderRecord.setItemCount(itemCount);
         orderRecord.setFulfillmentCity(FulfillmentCity.BAKI);
         orderRecord.setCurrencyCode("AZN");
+        orderRecord.setCustomerLanguage(customerLanguage);
         orderRecord.setStatus(OrderStatus.PENDING);
 
         for (OrderLine line : lines) {
@@ -105,7 +120,7 @@ public class CheckoutService {
             orderRecord.addItem(itemRecord);
         }
 
-        orderRecordRepository.save(orderRecord);
+        return orderRecordRepository.save(orderRecord);
     }
 
     private List<OrderLine> resolveOrderLines(AppUser user) {
@@ -117,12 +132,14 @@ public class CheckoutService {
         if (itemQuantities.isEmpty()) {
             return List.of();
         }
+
         List<Long> productIds = new ArrayList<>(itemQuantities.keySet());
         Map<Long, Product> products = productRepository.findAllForUpdateByIdIn(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, product -> product));
 
         List<OrderLine> lines = new ArrayList<>();
         List<String> availabilityErrors = new ArrayList<>();
+
         for (Map.Entry<Long, Integer> entry : itemQuantities.entrySet()) {
             Product product = products.get(entry.getKey());
             if (product == null) {
@@ -133,6 +150,7 @@ public class CheckoutService {
                 availabilityErrors.add("Product " + product.getName() + " is no longer active.");
                 continue;
             }
+
             int quantity = Math.max(1, entry.getValue());
             if (isStockUnknown(product)) {
                 availabilityErrors.add(
@@ -141,6 +159,7 @@ public class CheckoutService {
                 );
                 continue;
             }
+
             int availableQuantity = normalizeStock(product.getStockQuantity());
             if (availableQuantity < quantity) {
                 availabilityErrors.add(
@@ -150,6 +169,7 @@ public class CheckoutService {
                 );
                 continue;
             }
+
             BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
             lines.add(new OrderLine(product, quantity, lineTotal));
         }
@@ -159,26 +179,6 @@ public class CheckoutService {
         }
 
         return lines;
-    }
-
-    private void reserveStock(List<OrderLine> lines) {
-        for (OrderLine line : lines) {
-            Product product = line.product();
-            int updatedQuantity = Math.max(0, normalizeStock(product.getStockQuantity()) - line.quantity());
-            product.setStockQuantity(updatedQuantity);
-            product.setStockState(resolveStockState(updatedQuantity));
-        }
-        productRepository.saveAll(lines.stream().map(OrderLine::product).toList());
-    }
-
-    private StockState resolveStockState(int quantity) {
-        if (quantity <= 0) {
-            return StockState.OUT_OF_STOCK;
-        }
-        if (quantity <= 5) {
-            return StockState.LOW_STOCK;
-        }
-        return StockState.IN_STOCK;
     }
 
     private boolean isStockUnknown(Product product) {
@@ -255,121 +255,144 @@ public class CheckoutService {
         return userInfoRepository.save(target);
     }
 
-    private void sendInvoiceEmail(
-            String toEmail,
-            String invoiceNumber,
-            OffsetDateTime createdAt,
-            List<OrderLine> lines,
-            CustomerProfile customer,
-            BigDecimal total
-    ) {
-        AppProperties.Mail mail = appProperties.mail();
-        if (mail != null && !mail.enabled()) {
+    private void sendPendingOrderPlacedEmail(OrderRecord order, String toEmail) {
+        if (!isMailEnabled() || !hasText(toEmail)) {
             return;
         }
 
-        String appName = mail != null && hasText(mail.appName()) ? mail.appName().trim() : "RICHSTOK";
-        String from = mail != null && hasText(mail.from()) ? mail.from().trim() : "no-reply@richstok.local";
-        String html = buildInvoiceHtml(appName, invoiceNumber, createdAt, lines, customer, total);
+        String language = normalizeUiLanguage(order.getCustomerLanguage());
+        String appName = resolveAppName();
+
+        String subject;
+        String html;
+        switch (language) {
+            case "ru" -> {
+                subject = appName + " — Заказ принят: " + order.getInvoiceNumber();
+                html = buildPendingOrderHtml(order, language, appName);
+            }
+            case "en" -> {
+                subject = appName + " — Order received: " + order.getInvoiceNumber();
+                html = buildPendingOrderHtml(order, language, appName);
+            }
+            default -> {
+                subject = appName + " — Sifariş qəbul edildi: " + order.getInvoiceNumber();
+                html = buildPendingOrderHtml(order, language, appName);
+            }
+        }
 
         try {
-            MimeMessage mimeMessage = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
             helper.setTo(toEmail);
-            helper.setFrom(from);
-            helper.setSubject(appName + " Invoice " + invoiceNumber);
+            helper.setFrom(resolveFrom());
+            helper.setSubject(subject);
             helper.setText(html, true);
-            mailSender.send(mimeMessage);
+            mailSender.send(message);
         } catch (MessagingException | MailException exception) {
-            throw new IllegalStateException("Checkout completed, but invoice email delivery failed.", exception);
+            throw new IllegalStateException("Order created, but email delivery failed.", exception);
         }
     }
 
-    private String buildInvoiceHtml(
-            String appName,
-            String invoiceNumber,
-            OffsetDateTime createdAt,
-            List<OrderLine> lines,
-            CustomerProfile customer,
-            BigDecimal total
-    ) {
-        String rows = lines.stream()
-                .map(line -> """
-                        <tr>
-                          <td style="padding:12px;border-bottom:1px solid #eceff4;">%s</td>
-                          <td style="padding:12px;border-bottom:1px solid #eceff4;">%s</td>
-                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:center;">%d</td>
-                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:right;">%s AZN</td>
-                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:right;font-weight:600;">%s AZN</td>
-                        </tr>
-                        """.formatted(
-                        escapeHtml(line.product().getName()),
-                        escapeHtml(line.product().getSku()),
-                        line.quantity(),
-                        formatMoney(line.product().getPrice()),
-                        formatMoney(line.lineTotal())
-                ))
-                .collect(Collectors.joining());
+    private String buildPendingOrderHtml(OrderRecord order, String language, String appName) {
+        String title;
+        String lead;
+        String orderLabel;
+        String statusLabel;
+        String statusValue;
+        String footer;
 
-        String commentBlock = hasText(customer.comment())
-                ? "<p style=\"margin:14px 0 0;font-size:14px;color:#334155;\"><strong>Comment:</strong> " + escapeHtml(customer.comment()) + "</p>"
-                : "";
+        switch (language) {
+            case "ru" -> {
+                title = "Заказ успешно оформлен";
+                lead = "Ваш заказ принят и ожидает подтверждения администратором.";
+                orderLabel = "Номер заказа";
+                statusLabel = "Статус";
+                statusValue = "Ожидает подтверждения";
+                footer = "После подтверждения мы отправим вам инвойс отдельным письмом.";
+            }
+            case "en" -> {
+                title = "Order placed successfully";
+                lead = "Your order was received and is waiting for admin confirmation.";
+                orderLabel = "Order number";
+                statusLabel = "Status";
+                statusValue = "Pending confirmation";
+                footer = "After confirmation we will send the invoice in a separate email.";
+            }
+            default -> {
+                title = "Sifariş uğurla yaradıldı";
+                lead = "Sifarişiniz qəbul edildi və admin təsdiqini gözləyir.";
+                orderLabel = "Sifariş nömrəsi";
+                statusLabel = "Status";
+                statusValue = "Təsdiq gözləyir";
+                footer = "Təsdiqdən sonra invoice ayrıca məktub ilə göndəriləcək.";
+            }
+        }
 
         return """
                 <!doctype html>
                 <html lang="en">
-                <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#0f172a;">
-                  <div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
-                    <div style="padding:20px 24px;background:#111827;color:#f9fafb;">
-                      <h1 style="margin:0;font-size:22px;">%s — Invoice</h1>
-                      <p style="margin:8px 0 0;font-size:13px;color:#cbd5e1;">Invoice #%s · %s</p>
-                    </div>
-                    <div style="padding:22px 24px;">
-                      <p style="margin:0 0 10px;font-size:14px;"><strong>Customer:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Email:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Phone:</strong> %s</p>
-                      <p style="margin:0 0 6px;font-size:14px;"><strong>Address:</strong> %s</p>
-                      <p style="margin:0 0 0;font-size:14px;"><strong>Location:</strong> %s, %s %s</p>
-                      %s
-                    </div>
-                    <div style="padding:0 24px 16px;">
-                      <table style="width:100%%;border-collapse:collapse;font-size:14px;">
-                        <thead>
-                          <tr style="background:#f8fafc;color:#334155;">
-                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Product</th>
-                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Brand code</th>
-                            <th style="text-align:center;padding:10px;border-bottom:1px solid #e2e8f0;">Qty</th>
-                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Unit</th>
-                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Total</th>
+                <head>
+                  <meta charset="UTF-8" />
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                </head>
+                <body style="margin:0;padding:18px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
+                  <table role="presentation" style="width:100%%;max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;border-collapse:separate;">
+                    <tr>
+                      <td style="padding:18px 20px;background:#111827;color:#f9fafb;">
+                        <div style="font-size:20px;font-weight:700;">%s</div>
+                        <div style="margin-top:6px;font-size:13px;color:#d1d5db;">%s</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:18px 20px;">
+                        <p style="margin:0 0 12px;font-size:14px;">%s</p>
+                        <table role="presentation" style="width:100%%;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-collapse:separate;">
+                          <tr>
+                            <td style="padding:12px 16px;background:#f8fafc;"><strong>%s</strong></td>
+                            <td style="padding:12px 16px;background:#f8fafc;">%s</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          %s
-                        </tbody>
-                      </table>
-                    </div>
-                    <div style="padding:14px 24px 24px;text-align:right;">
-                      <p style="margin:0;font-size:13px;color:#64748b;">Grand Total</p>
-                      <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#dc2626;">%s AZN</p>
-                    </div>
-                  </div>
+                          <tr>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;"><strong>%s</strong></td>
+                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;">%s</td>
+                          </tr>
+                        </table>
+                        <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">%s</p>
+                      </td>
+                    </tr>
+                  </table>
                 </body>
                 </html>
                 """.formatted(
                 escapeHtml(appName),
-                escapeHtml(invoiceNumber),
-                createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
-                escapeHtml(customer.fullName()),
-                escapeHtml(customer.email()),
-                escapeHtml(customer.phone()),
-                escapeHtml(customer.addressLine1()),
-                escapeHtml(customer.city()),
-                escapeHtml(customer.country()),
-                escapeHtml(customer.postalCode() == null ? "" : customer.postalCode()),
-                commentBlock,
-                rows,
-                formatMoney(total)
+                escapeHtml(title),
+                escapeHtml(lead),
+                escapeHtml(orderLabel),
+                escapeHtml(order.getInvoiceNumber()),
+                escapeHtml(statusLabel),
+                escapeHtml(statusValue),
+                escapeHtml(footer)
         );
+    }
+
+    private String resolveFrom() {
+        AppProperties.Mail mail = appProperties.mail();
+        if (mail != null && hasText(mail.from())) {
+            return mail.from().trim();
+        }
+        return "no-reply@richstok.local";
+    }
+
+    private String resolveAppName() {
+        AppProperties.Mail mail = appProperties.mail();
+        if (mail != null && hasText(mail.appName())) {
+            return mail.appName().trim();
+        }
+        return "RICHSTOK";
+    }
+
+    private boolean isMailEnabled() {
+        AppProperties.Mail mail = appProperties.mail();
+        return mail == null || mail.enabled();
     }
 
     private String buildInvoiceNumber() {
@@ -377,8 +400,16 @@ public class CheckoutService {
         return "RSK-" + OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + randomPart;
     }
 
-    private String formatMoney(BigDecimal value) {
-        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    private String normalizeUiLanguage(String value) {
+        if (!hasText(value)) {
+            return "az";
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "ru", "ru-ru", "russian" -> "ru";
+            case "en", "en-us", "en-gb", "english" -> "en";
+            default -> "az";
+        };
     }
 
     private String normalizeNullable(String value) {
@@ -387,14 +418,6 @@ public class CheckoutService {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
     }
 
     private String escapeHtml(String value) {
@@ -407,6 +430,14 @@ public class CheckoutService {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private record OrderLine(

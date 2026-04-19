@@ -77,7 +77,7 @@ const copy: Record<
     clear: "Səbəti təmizlə",
     checkout: "Sifarişi tamamla",
     checkingOut: "Göndərilir...",
-    invoiceSuccess: "İnvoice emailə göndərildi.",
+    invoiceSuccess: "Sifariş qəbul edildi. Admin təsdiqindən sonra invoice göndəriləcək.",
     quantity: "Miqdar",
     remove: "Sil",
     subtotal: "Ara cəm",
@@ -110,7 +110,7 @@ const copy: Record<
     clear: "Clear cart",
     checkout: "Complete checkout",
     checkingOut: "Submitting...",
-    invoiceSuccess: "Invoice has been sent to email.",
+    invoiceSuccess: "Order placed. Invoice will be sent after admin confirmation.",
     quantity: "Quantity",
     remove: "Remove",
     subtotal: "Subtotal",
@@ -143,7 +143,7 @@ const copy: Record<
     clear: "Очистить корзину",
     checkout: "Оформить заказ",
     checkingOut: "Отправка...",
-    invoiceSuccess: "Инвойс отправлен на email.",
+    invoiceSuccess: "Заказ оформлен. Инвойс придёт после подтверждения админом.",
     quantity: "Количество",
     remove: "Удалить",
     subtotal: "Итого",
@@ -269,7 +269,7 @@ export default function CartPage({language, displayCurrency, currencyRates, auth
     setSuccess(null);
     setSubmitting(true);
     try {
-      await checkoutOrder(profile);
+      await checkoutOrder({...profile, language});
       setSuccess(ui.invoiceSuccess);
       await clearCart();
     } catch (requestError) {
