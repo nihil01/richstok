@@ -53,6 +53,9 @@ public class OrderItemRecord {
     @Column(name = "return_reason", columnDefinition = "text")
     private String returnReason;
 
+    @Column(name = "customer_note", columnDefinition = "text")
+    private String customerNote;
+
     @Column(nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

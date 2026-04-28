@@ -12,6 +12,7 @@ public record UserOrderItemResponse(
         BigDecimal unitPrice,
         BigDecimal lineTotal,
         String imageUrl,
+        String customerNote,
         String returnReason
 ) {
 }

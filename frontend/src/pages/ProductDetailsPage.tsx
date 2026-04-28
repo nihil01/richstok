@@ -42,6 +42,7 @@ const detailsCopy: Record<
     quality: string;
     defaultDescription: string;
     stockUnknownHint: string;
+    discountLabel: string;
     yes: string;
     no: string;
   }
@@ -71,6 +72,7 @@ const detailsCopy: Record<
     quality: "Orijinal və test edilmiş ehtiyat hissə",
     defaultDescription: "Bu məhsul üçün təsvir əlavə edilməyib.",
     stockUnknownHint: "Dəqiq stok məlum deyil. Dəqiq say üçün dəstək xidməti ilə əlaqə saxlayın.",
+    discountLabel: "Endirim",
     yes: "Bəli",
     no: "Xeyr"
   },
@@ -99,6 +101,7 @@ const detailsCopy: Record<
     quality: "Genuine and quality-tested auto part",
     defaultDescription: "No description has been added for this product.",
     stockUnknownHint: "Exact stock quantity is unknown. Please contact support to confirm availability.",
+    discountLabel: "Discount",
     yes: "Yes",
     no: "No"
   },
@@ -127,6 +130,7 @@ const detailsCopy: Record<
     quality: "Оригинальная и проверенная автозапчасть",
     defaultDescription: "Для этого товара пока нет описания.",
     stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
+    discountLabel: "Скидка",
     yes: "Да",
     no: "Нет"
   }
@@ -194,6 +198,9 @@ export default function ProductDetailsPage({
 
   const locale = language === "ru" ? "ru-RU" : language === "en" ? "en-GB" : "az-Latn-AZ";
   const stockState = product ? stockStateLabelMap[language][product.stockState] ?? product.stockState : "—";
+  const hasDiscount = Boolean(product?.hasDiscount) || (product?.discountPercent ?? 0) > 0;
+  const discountPercent = Math.max(0, Math.min(100, product?.discountPercent ?? 0));
+  const effectivePrice = product ? (hasDiscount ? (product.discountedPrice ?? product.price) : product.price) : 0;
   const hasUnknownStock = product ? product.unknownCount : false;
   const outOfStock = product ? product.stockQuantity <= 0 : true;
   const addDisabled = hasUnknownStock || outOfStock;
@@ -303,7 +310,27 @@ export default function ProductDetailsPage({
             )}
 
             <div className="rounded-xl border border-brand-500/24 bg-brand-500/8 p-4">
-              <p className="theme-heading text-3xl font-semibold text-brand-200">{formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  {hasDiscount && (
+                    <p className="theme-muted text-sm line-through">
+                      {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}
+                    </p>
+                  )}
+                  <p className="theme-heading text-3xl font-semibold text-brand-200">
+                    {formatConvertedPrice(effectivePrice, displayCurrency, currencyRates, language)}
+                  </p>
+                </div>
+                {hasDiscount && (
+                  <motion.span
+                    initial={{opacity: 0, y: 6}}
+                    animate={{opacity: 1, y: 0}}
+                    className="rounded-lg border border-rose-400/35 bg-rose-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-100"
+                  >
+                    {copy.discountLabel} -{discountPercent}%
+                  </motion.span>
+                )}
+              </div>
               <p className="theme-muted mt-1 text-xs">AZN base · {copy.delivery}</p>
               <p className="theme-muted text-xs">{copy.quality}</p>
             </div>

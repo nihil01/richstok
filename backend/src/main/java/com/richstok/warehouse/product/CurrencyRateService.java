@@ -23,7 +23,7 @@ public final class CurrencyRateService {
 
     public CurrencyDTO getRate() {
 
-        String API_KEY = appProperties.currency().apiKey();
+        String API_KEY = appProperties.currencyRate().apiKey();
 
         if (currencyDto != null && lastSave != null && Instant.now().isBefore(lastSave.plusMillis(refreshRate))){
             return currencyDto;

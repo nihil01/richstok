@@ -13,6 +13,7 @@ public record ProductRequest(
         @Size(max = 2000) String description,
         @Size(max = 2000000) String imageUrl,
         @NotNull @DecimalMin("0.00") BigDecimal price,
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal discountPercent,
         @NotNull @PositiveOrZero Integer stockQuantity,
         @Pattern(regexp = "IN_STOCK|LOW_STOCK|OUT_OF_STOCK") String stockState,
         @Size(max = 60) String model,

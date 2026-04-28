@@ -6,9 +6,11 @@ import com.richstok.warehouse.auth.UserInfo;
 import com.richstok.warehouse.auth.UserInfoRepository;
 import com.richstok.warehouse.cart.CartService;
 import com.richstok.warehouse.config.AppProperties;
+import com.richstok.warehouse.order.dto.CheckoutItemRequest;
 import com.richstok.warehouse.order.dto.CheckoutRequest;
 import com.richstok.warehouse.order.dto.CheckoutResponse;
 import com.richstok.warehouse.product.Product;
+import com.richstok.warehouse.product.ProductPricing;
 import com.richstok.warehouse.product.ProductRepository;
 import com.richstok.warehouse.product.StockState;
 import jakarta.mail.MessagingException;
@@ -48,11 +50,12 @@ public class CheckoutService {
         UserInfo userInfo = userInfoRepository.findByUserId(user.getId())
                 .orElse(null);
 
-        List<OrderLine> orderLines = resolveOrderLines(user);
+        System.out.println(request);
+
+        List<OrderLine> orderLines = resolveOrderLines(user, request.items());
         if (orderLines.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty.");
         }
-
         CustomerProfile customer = resolveCustomerProfile(request, user, userInfo);
         validateCustomer(customer);
         UserInfo savedUserInfo = persistCustomerProfile(user, customer, userInfo);
@@ -63,20 +66,7 @@ public class CheckoutService {
                 .map(OrderLine::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         int itemCount = orderLines.stream().mapToInt(OrderLine::quantity).sum();
-
-        String customerLanguage = normalizeUiLanguage(request.language());
-        OrderRecord orderRecord = persistPendingOrder(
-                invoiceNumber,
-                user,
-                savedUserInfo,
-                customer,
-                total,
-                itemCount,
-                orderLines,
-                customerLanguage
-        );
-
-        sendPendingOrderPlacedEmail(orderRecord, customer.email());
+        persistPendingOrder(request.language(), invoiceNumber, user, savedUserInfo, customer, total, itemCount, orderLines);
         cartService.clearCartByUserId(user.getId());
 
         return new CheckoutResponse(
@@ -88,15 +78,15 @@ public class CheckoutService {
         );
     }
 
-    private OrderRecord persistPendingOrder(
+    private void persistPendingOrder(
+            String lang,
             String invoiceNumber,
             AppUser user,
             UserInfo userInfo,
             CustomerProfile customer,
             BigDecimal total,
             int itemCount,
-            List<OrderLine> lines,
-            String customerLanguage
+            List<OrderLine> lines
     ) {
         OrderRecord orderRecord = new OrderRecord();
         orderRecord.setInvoiceNumber(invoiceNumber);
@@ -107,39 +97,42 @@ public class CheckoutService {
         orderRecord.setItemCount(itemCount);
         orderRecord.setFulfillmentCity(FulfillmentCity.BAKI);
         orderRecord.setCurrencyCode("AZN");
-        orderRecord.setCustomerLanguage(customerLanguage);
+        orderRecord.setLang(lang);
+        orderRecord.setRecordedAsDebt(false);
         orderRecord.setStatus(OrderStatus.PENDING);
+
+        System.out.println(orderRecord);
 
         for (OrderLine line : lines) {
             Product product = line.product();
             OrderItemRecord itemRecord = new OrderItemRecord();
             itemRecord.setProductId(product.getId());
-            itemRecord.setUnitPrice(product.getPrice().setScale(2, RoundingMode.HALF_UP));
+            itemRecord.setUnitPrice(line.unitPrice().setScale(2, RoundingMode.HALF_UP));
             itemRecord.setQuantity(line.quantity());
             itemRecord.setLineTotal(line.lineTotal().setScale(2, RoundingMode.HALF_UP));
+            itemRecord.setCustomerNote(line.customerNote());
             orderRecord.addItem(itemRecord);
         }
 
-        return orderRecordRepository.save(orderRecord);
+        orderRecordRepository.save(orderRecord);
     }
 
-    private List<OrderLine> resolveOrderLines(AppUser user) {
+    private List<OrderLine> resolveOrderLines(AppUser user, List<CheckoutItemRequest> requestedItems) {
         Map<Long, Integer> rawCart = cartService.getRawCartByUserId(user.getId());
-        return mapOrderLines(rawCart);
+        Map<Long, String> customerNotesByProductId = resolveCustomerNotesByProductId(requestedItems);
+        return mapOrderLines(rawCart, customerNotesByProductId);
     }
 
-    private List<OrderLine> mapOrderLines(Map<Long, Integer> itemQuantities) {
+    private List<OrderLine> mapOrderLines(Map<Long, Integer> itemQuantities, Map<Long, String> customerNotesByProductId) {
         if (itemQuantities.isEmpty()) {
             return List.of();
         }
-
         List<Long> productIds = new ArrayList<>(itemQuantities.keySet());
         Map<Long, Product> products = productRepository.findAllForUpdateByIdIn(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, product -> product));
 
         List<OrderLine> lines = new ArrayList<>();
         List<String> availabilityErrors = new ArrayList<>();
-
         for (Map.Entry<Long, Integer> entry : itemQuantities.entrySet()) {
             Product product = products.get(entry.getKey());
             if (product == null) {
@@ -150,7 +143,6 @@ public class CheckoutService {
                 availabilityErrors.add("Product " + product.getName() + " is no longer active.");
                 continue;
             }
-
             int quantity = Math.max(1, entry.getValue());
             if (isStockUnknown(product)) {
                 availabilityErrors.add(
@@ -159,7 +151,6 @@ public class CheckoutService {
                 );
                 continue;
             }
-
             int availableQuantity = normalizeStock(product.getStockQuantity());
             if (availableQuantity < quantity) {
                 availabilityErrors.add(
@@ -169,9 +160,16 @@ public class CheckoutService {
                 );
                 continue;
             }
-
-            BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
-            lines.add(new OrderLine(product, quantity, lineTotal));
+            BigDecimal discountPercent = ProductPricing.normalizeDiscountPercent(product.getDiscountPercent());
+            BigDecimal unitPrice = ProductPricing.resolveDiscountedPrice(product.getPrice(), discountPercent);
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+            lines.add(new OrderLine(
+                    product,
+                    quantity,
+                    unitPrice,
+                    lineTotal,
+                    customerNotesByProductId.get(product.getId())
+            ));
         }
 
         if (!availabilityErrors.isEmpty()) {
@@ -179,6 +177,26 @@ public class CheckoutService {
         }
 
         return lines;
+    }
+
+    private void reserveStock(List<OrderLine> lines) {
+        for (OrderLine line : lines) {
+            Product product = line.product();
+            int updatedQuantity = Math.max(0, normalizeStock(product.getStockQuantity()) - line.quantity());
+            product.setStockQuantity(updatedQuantity);
+            product.setStockState(resolveStockState(updatedQuantity));
+        }
+        productRepository.saveAll(lines.stream().map(OrderLine::product).toList());
+    }
+
+    private StockState resolveStockState(int quantity) {
+        if (quantity <= 0) {
+            return StockState.OUT_OF_STOCK;
+        }
+        if (quantity <= 5) {
+            return StockState.LOW_STOCK;
+        }
+        return StockState.IN_STOCK;
     }
 
     private boolean isStockUnknown(Product product) {
@@ -255,144 +273,121 @@ public class CheckoutService {
         return userInfoRepository.save(target);
     }
 
-    private void sendPendingOrderPlacedEmail(OrderRecord order, String toEmail) {
-        if (!isMailEnabled() || !hasText(toEmail)) {
+    private void sendInvoiceEmail(
+            String toEmail,
+            String invoiceNumber,
+            OffsetDateTime createdAt,
+            List<OrderLine> lines,
+            CustomerProfile customer,
+            BigDecimal total
+    ) {
+        AppProperties.Mail mail = appProperties.mail();
+        if (mail != null && !mail.enabled()) {
             return;
         }
 
-        String language = normalizeUiLanguage(order.getCustomerLanguage());
-        String appName = resolveAppName();
-
-        String subject;
-        String html;
-        switch (language) {
-            case "ru" -> {
-                subject = appName + " — Заказ принят: " + order.getInvoiceNumber();
-                html = buildPendingOrderHtml(order, language, appName);
-            }
-            case "en" -> {
-                subject = appName + " — Order received: " + order.getInvoiceNumber();
-                html = buildPendingOrderHtml(order, language, appName);
-            }
-            default -> {
-                subject = appName + " — Sifariş qəbul edildi: " + order.getInvoiceNumber();
-                html = buildPendingOrderHtml(order, language, appName);
-            }
-        }
+        String appName = mail != null && hasText(mail.appName()) ? mail.appName().trim() : "RICHSTOK";
+        String from = mail != null && hasText(mail.from()) ? mail.from().trim() : "no-reply@richstok.local";
+        String html = buildInvoiceHtml(appName, invoiceNumber, createdAt, lines, customer, total);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
             helper.setTo(toEmail);
-            helper.setFrom(resolveFrom());
-            helper.setSubject(subject);
+            helper.setFrom(from);
+            helper.setSubject(appName + " Invoice " + invoiceNumber);
             helper.setText(html, true);
-            mailSender.send(message);
+            mailSender.send(mimeMessage);
         } catch (MessagingException | MailException exception) {
-            throw new IllegalStateException("Order created, but email delivery failed.", exception);
+            throw new IllegalStateException("Checkout completed, but invoice email delivery failed.", exception);
         }
     }
 
-    private String buildPendingOrderHtml(OrderRecord order, String language, String appName) {
-        String title;
-        String lead;
-        String orderLabel;
-        String statusLabel;
-        String statusValue;
-        String footer;
+    private String buildInvoiceHtml(
+            String appName,
+            String invoiceNumber,
+            OffsetDateTime createdAt,
+            List<OrderLine> lines,
+            CustomerProfile customer,
+            BigDecimal total
+    ) {
+        String rows = lines.stream()
+                .map(line -> """
+                        <tr>
+                          <td style="padding:12px;border-bottom:1px solid #eceff4;">%s</td>
+                          <td style="padding:12px;border-bottom:1px solid #eceff4;">%s</td>
+                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:center;">%d</td>
+                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:right;">%s AZN</td>
+                          <td style="padding:12px;border-bottom:1px solid #eceff4;text-align:right;font-weight:600;">%s AZN</td>
+                        </tr>
+                        """.formatted(
+                        escapeHtml(line.product().getName()),
+                        escapeHtml(line.product().getSku()),
+                        line.quantity(),
+                        formatMoney(line.unitPrice()),
+                        formatMoney(line.lineTotal())
+                ))
+                .collect(Collectors.joining());
 
-        switch (language) {
-            case "ru" -> {
-                title = "Заказ успешно оформлен";
-                lead = "Ваш заказ принят и ожидает подтверждения администратором.";
-                orderLabel = "Номер заказа";
-                statusLabel = "Статус";
-                statusValue = "Ожидает подтверждения";
-                footer = "После подтверждения мы отправим вам инвойс отдельным письмом.";
-            }
-            case "en" -> {
-                title = "Order placed successfully";
-                lead = "Your order was received and is waiting for admin confirmation.";
-                orderLabel = "Order number";
-                statusLabel = "Status";
-                statusValue = "Pending confirmation";
-                footer = "After confirmation we will send the invoice in a separate email.";
-            }
-            default -> {
-                title = "Sifariş uğurla yaradıldı";
-                lead = "Sifarişiniz qəbul edildi və admin təsdiqini gözləyir.";
-                orderLabel = "Sifariş nömrəsi";
-                statusLabel = "Status";
-                statusValue = "Təsdiq gözləyir";
-                footer = "Təsdiqdən sonra invoice ayrıca məktub ilə göndəriləcək.";
-            }
-        }
+        String commentBlock = hasText(customer.comment())
+                ? "<p style=\"margin:14px 0 0;font-size:14px;color:#334155;\"><strong>Comment:</strong> " + escapeHtml(customer.comment()) + "</p>"
+                : "";
 
         return """
                 <!doctype html>
                 <html lang="en">
-                <head>
-                  <meta charset="UTF-8" />
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                </head>
-                <body style="margin:0;padding:18px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
-                  <table role="presentation" style="width:100%%;max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;border-collapse:separate;">
-                    <tr>
-                      <td style="padding:18px 20px;background:#111827;color:#f9fafb;">
-                        <div style="font-size:20px;font-weight:700;">%s</div>
-                        <div style="margin-top:6px;font-size:13px;color:#d1d5db;">%s</div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding:18px 20px;">
-                        <p style="margin:0 0 12px;font-size:14px;">%s</p>
-                        <table role="presentation" style="width:100%%;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-collapse:separate;">
-                          <tr>
-                            <td style="padding:12px 16px;background:#f8fafc;"><strong>%s</strong></td>
-                            <td style="padding:12px 16px;background:#f8fafc;">%s</td>
+                <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#0f172a;">
+                  <div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+                    <div style="padding:20px 24px;background:#111827;color:#f9fafb;">
+                      <h1 style="margin:0;font-size:22px;">%s — Invoice</h1>
+                      <p style="margin:8px 0 0;font-size:13px;color:#cbd5e1;">Invoice #%s · %s</p>
+                    </div>
+                    <div style="padding:22px 24px;">
+                      <p style="margin:0 0 10px;font-size:14px;"><strong>Customer:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>Email:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>Phone:</strong> %s</p>
+                      <p style="margin:0 0 6px;font-size:14px;"><strong>Address:</strong> %s</p>
+                      <p style="margin:0 0 0;font-size:14px;"><strong>Location:</strong> %s, %s %s</p>
+                      %s
+                    </div>
+                    <div style="padding:0 24px 16px;">
+                      <table style="width:100%%;border-collapse:collapse;font-size:14px;">
+                        <thead>
+                          <tr style="background:#f8fafc;color:#334155;">
+                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Product</th>
+                            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;">Brand code</th>
+                            <th style="text-align:center;padding:10px;border-bottom:1px solid #e2e8f0;">Qty</th>
+                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Unit</th>
+                            <th style="text-align:right;padding:10px;border-bottom:1px solid #e2e8f0;">Total</th>
                           </tr>
-                          <tr>
-                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;"><strong>%s</strong></td>
-                            <td style="padding:12px 16px;border-top:1px solid #e5e7eb;">%s</td>
-                          </tr>
-                        </table>
-                        <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">%s</p>
-                      </td>
-                    </tr>
-                  </table>
+                        </thead>
+                        <tbody>
+                          %s
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style="padding:14px 24px 24px;text-align:right;">
+                      <p style="margin:0;font-size:13px;color:#64748b;">Grand Total</p>
+                      <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#dc2626;">%s AZN</p>
+                    </div>
+                  </div>
                 </body>
                 </html>
                 """.formatted(
                 escapeHtml(appName),
-                escapeHtml(title),
-                escapeHtml(lead),
-                escapeHtml(orderLabel),
-                escapeHtml(order.getInvoiceNumber()),
-                escapeHtml(statusLabel),
-                escapeHtml(statusValue),
-                escapeHtml(footer)
+                escapeHtml(invoiceNumber),
+                createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
+                escapeHtml(customer.fullName()),
+                escapeHtml(customer.email()),
+                escapeHtml(customer.phone()),
+                escapeHtml(customer.addressLine1()),
+                escapeHtml(customer.city()),
+                escapeHtml(customer.country()),
+                escapeHtml(customer.postalCode() == null ? "" : customer.postalCode()),
+                commentBlock,
+                rows,
+                formatMoney(total)
         );
-    }
-
-    private String resolveFrom() {
-        AppProperties.Mail mail = appProperties.mail();
-        if (mail != null && hasText(mail.from())) {
-            return mail.from().trim();
-        }
-        return "no-reply@richstok.local";
-    }
-
-    private String resolveAppName() {
-        AppProperties.Mail mail = appProperties.mail();
-        if (mail != null && hasText(mail.appName())) {
-            return mail.appName().trim();
-        }
-        return "RICHSTOK";
-    }
-
-    private boolean isMailEnabled() {
-        AppProperties.Mail mail = appProperties.mail();
-        return mail == null || mail.enabled();
     }
 
     private String buildInvoiceNumber() {
@@ -400,16 +395,8 @@ public class CheckoutService {
         return "RSK-" + OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + randomPart;
     }
 
-    private String normalizeUiLanguage(String value) {
-        if (!hasText(value)) {
-            return "az";
-        }
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "ru", "ru-ru", "russian" -> "ru";
-            case "en", "en-us", "en-gb", "english" -> "en";
-            default -> "az";
-        };
+    private String formatMoney(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private String normalizeNullable(String value) {
@@ -418,6 +405,47 @@ public class CheckoutService {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private Map<Long, String> resolveCustomerNotesByProductId(List<CheckoutItemRequest> requestedItems) {
+        if (requestedItems == null || requestedItems.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> result = new java.util.LinkedHashMap<>();
+        for (CheckoutItemRequest item : requestedItems) {
+            Long productId = item.productId();
+            if (productId == null) {
+                continue;
+            }
+            String normalizedNote = normalizeCustomerItemNote(item.note());
+            if (!result.containsKey(productId)) {
+                result.put(productId, normalizedNote);
+                continue;
+            }
+            if (hasText(normalizedNote)) {
+                result.put(productId, normalizedNote);
+            }
+        }
+        return result;
+    }
+
+    private String normalizeCustomerItemNote(String note) {
+        String normalized = normalizeNullable(note);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() <= 500) {
+            return normalized;
+        }
+        return normalized.substring(0, 500);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String escapeHtml(String value) {
@@ -432,18 +460,12 @@ public class CheckoutService {
                 .replace("'", "&#39;");
     }
 
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
-
     private record OrderLine(
             Product product,
             int quantity,
-            BigDecimal lineTotal
+            BigDecimal unitPrice,
+            BigDecimal lineTotal,
+            String customerNote
     ) {
     }
 

@@ -18,6 +18,7 @@ public record AdminOrderListItemResponse(
         BigDecimal totalAmount,
         Integer itemCount,
         String currencyCode,
+        boolean recordedAsDebt,
         OrderStatus status,
         OffsetDateTime createdAt
 ) {

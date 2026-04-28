@@ -3,12 +3,15 @@ package com.richstok.warehouse.auth;
 import com.richstok.warehouse.auth.dto.AdminUserCreateRequest;
 import com.richstok.warehouse.auth.dto.AdminUserResponse;
 import com.richstok.warehouse.common.NotFoundException;
+import com.richstok.warehouse.debt.UserDebtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -17,11 +20,17 @@ public class AdminUserService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthCredentialsEmailService authCredentialsEmailService;
+    private final UserDebtService userDebtService;
 
     @Transactional(readOnly = true)
     public List<AdminUserResponse> getAllUsers() {
-        return appUserRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(this::toResponse)
+        List<AppUser> users = appUserRepository.findAllByOrderByCreatedAtDesc();
+        Map<Long, UserDebtService.DebtSnapshot> debtByUserId = userDebtService.getDebtSnapshots(
+                users.stream().map(AppUser::getId).toList()
+        );
+
+        return users.stream()
+                .map(user -> toResponse(user, debtByUserId.get(user.getId())))
                 .toList();
     }
 
@@ -41,7 +50,7 @@ public class AdminUserService {
 
         AppUser savedUser = appUserRepository.save(user);
         authCredentialsEmailService.sendCredentials(savedUser, request.password());
-        return toResponse(savedUser);
+        return toResponse(savedUser, userDebtService.getDebtSnapshot(savedUser.getId()));
     }
 
     @Transactional
@@ -49,7 +58,30 @@ public class AdminUserService {
         AppUser user = appUserRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User id not found: " + id));
         user.setActive(active);
-        return toResponse(appUserRepository.save(user));
+        AppUser savedUser = appUserRepository.save(user);
+        return toResponse(savedUser, userDebtService.getDebtSnapshot(savedUser.getId()));
+    }
+
+    @Transactional
+    public AdminUserResponse setUserDebtLimit(Long id, BigDecimal debtLimit) {
+        AppUser user = appUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User id not found: " + id));
+        if (user.getRole() == UserRole.ADMIN) {
+            throw new IllegalArgumentException("Debt limit cannot be assigned to admin users.");
+        }
+        UserDebtService.DebtSnapshot debtSnapshot = userDebtService.setDebtLimit(id, debtLimit);
+        return toResponse(user, debtSnapshot);
+    }
+
+    @Transactional
+    public AdminUserResponse resetUserDebtLimit(Long id) {
+        AppUser user = appUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User id not found: " + id));
+        if (user.getRole() == UserRole.ADMIN) {
+            throw new IllegalArgumentException("Debt limit cannot be assigned to admin users.");
+        }
+        UserDebtService.DebtSnapshot debtSnapshot = userDebtService.resetDebtLimit(id);
+        return toResponse(user, debtSnapshot);
     }
 
     @Transactional
@@ -68,13 +100,19 @@ public class AdminUserService {
         appUserRepository.delete(targetUser);
     }
 
-    private AdminUserResponse toResponse(AppUser user) {
+    private AdminUserResponse toResponse(AppUser user, UserDebtService.DebtSnapshot debtSnapshot) {
+        UserDebtService.DebtSnapshot safeDebtSnapshot = debtSnapshot != null
+                ? debtSnapshot
+                : userDebtService.getDebtSnapshot(user.getId());
         return new AdminUserResponse(
                 user.getId(),
                 user.getFullName(),
                 user.getEmail(),
                 user.getRole(),
                 user.isActive(),
+                safeDebtSnapshot.debtLimit(),
+                safeDebtSnapshot.currentDebt(),
+                safeDebtSnapshot.availableDebt(),
                 user.getCreatedAt()
         );
     }

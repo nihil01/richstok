@@ -36,6 +36,9 @@ public class Product {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
+    @Column(name = "discount_percent", nullable = false, precision = 5, scale = 2)
+    private BigDecimal discountPercent;
+
     @Column(nullable = false)
     private Integer stockQuantity;
 
@@ -73,6 +76,9 @@ public class Product {
         OffsetDateTime now = OffsetDateTime.now();
         createdAt = now;
         updatedAt = now;
+        if (discountPercent == null) {
+            discountPercent = BigDecimal.ZERO;
+        }
     }
 
     @PreUpdate

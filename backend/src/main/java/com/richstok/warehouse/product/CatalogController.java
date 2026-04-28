@@ -45,6 +45,13 @@ public class CatalogController {
         return productService.getCatalogStats();
     }
 
+    @GetMapping("/discounts")
+    public List<ProductResponse> getDiscountedProducts(
+            @RequestParam(value = "limit", defaultValue = "12") int limit
+    ) {
+        return productService.getDiscountedProducts(limit);
+    }
+
     @GetMapping("/search")
     public List<ProductResponse> searchProducts(@RequestParam(value = "query", required = false) String query) {
         return productService.searchActiveProducts(query);

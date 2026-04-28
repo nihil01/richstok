@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -98,20 +100,22 @@ public class ProductService {
         long totalBrands = catalogProducts.stream()
                 .map(Product::getBrand)
                 .map(this::normalizeNullable)
-                .filter(value -> value != null)
-                .map(value -> value.toLowerCase(Locale.ROOT))
+                .filter(Objects::nonNull)
+                .map(brand -> brand.toLowerCase(Locale.ROOT))
                 .distinct()
                 .count();
         long totalCategories = catalogProducts.stream()
                 .map(Product::getCategory)
                 .map(this::normalizeCatalogCategory)
-                .filter(value -> value != null)
-                .map(value -> value.toLowerCase(Locale.ROOT))
+                .filter(Objects::nonNull)
+                .map(category -> category.toLowerCase(Locale.ROOT))
                 .distinct()
                 .count();
         long totalStockQuantity = catalogProducts.stream()
                 .filter(product -> !product.isUnknownCount())
-                .mapToLong(product -> Math.max(0, product.getStockQuantity() == null ? 0 : product.getStockQuantity()))
+                .map(Product::getStockQuantity)
+                .filter(Objects::nonNull)
+                .mapToLong(quantity -> Math.max(quantity, 0))
                 .sum();
         long unknownStockProducts = catalogProducts.stream()
                 .filter(Product::isUnknownCount)
@@ -165,6 +169,22 @@ public class ProductService {
                         ProductSpecifications.bySearchQuery(query),
                         Sort.by(Sort.Direction.DESC, "createdAt")
                 ).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getDiscountedProducts(int limit) {
+        int safeLimit = Math.clamp(limit, 1, 24);
+        Pageable pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "discountPercent")
+                .and(Sort.by(Sort.Direction.DESC, "createdAt")));
+        BigDecimal minimumDiscount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        List<Product> discountedProducts = isCatalogActiveFilterEnabled()
+                ? productRepository.findByActiveTrueAndDiscountPercentGreaterThan(minimumDiscount, pageable)
+                : productRepository.findByDiscountPercentGreaterThan(minimumDiscount, pageable);
+
+        return discountedProducts.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -336,6 +356,7 @@ public class ProductService {
                 description,
                 null,
                 price,
+                null,
                 stockResolution.quantity(),
                 stockResolution.stockState(),
                 brand,
@@ -456,6 +477,7 @@ public class ProductService {
                 normalizeNullable(request.description()),
                 normalizeImageUrl(request.imageUrl()),
                 request.price(),
+                normalizeDiscountPercent(request.discountPercent()),
                 normalizedStockQuantity,
                 resolvedStockState,
                 normalizeNullable(request.brand()),
@@ -471,6 +493,9 @@ public class ProductService {
 
     private void applyParsedRow(Product product, ParsedRow parsedRow, Long currentProductId) {
         String resolvedSlug = resolveUniqueSlug(parsedRow.slug(), parsedRow.name(), parsedRow.sku(), currentProductId);
+        BigDecimal resolvedDiscountPercent = parsedRow.discountPercent() != null
+                ? normalizeDiscountPercent(parsedRow.discountPercent())
+                : ProductPricing.normalizeDiscountPercent(product.getDiscountPercent());
         product.setName(parsedRow.name());
         product.setSlug(resolvedSlug);
         product.setSku(parsedRow.sku());
@@ -479,6 +504,7 @@ public class ProductService {
         product.setDescription(parsedRow.description());
         product.setImageUrl(parsedRow.imageUrl());
         product.setPrice(parsedRow.price());
+        product.setDiscountPercent(resolvedDiscountPercent);
         product.setStockQuantity(parsedRow.stockQuantity());
         product.setStockState(parsedRow.stockState());
         product.setBrand(parsedRow.brand());
@@ -489,6 +515,8 @@ public class ProductService {
     }
 
     private ProductResponse toResponse(Product product) {
+        BigDecimal discountPercent = ProductPricing.normalizeDiscountPercent(product.getDiscountPercent());
+        BigDecimal discountedPrice = ProductPricing.resolveDiscountedPrice(product.getPrice(), discountPercent);
         return new ProductResponse(
                 product.getId(),
                 product.getName(),
@@ -499,6 +527,9 @@ public class ProductService {
                 product.getDescription(),
                 product.getImageUrl(),
                 product.getPrice(),
+                discountPercent,
+                discountedPrice,
+                ProductPricing.hasDiscount(discountPercent),
                 product.getStockQuantity(),
                 product.getStockState().name(),
                 product.getModel(),
@@ -798,6 +829,16 @@ public class ProductService {
         return value;
     }
 
+    private BigDecimal normalizeDiscountPercent(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException("Discount must be between 0 and 100.");
+        }
+        return ProductPricing.normalizeDiscountPercent(value);
+    }
+
     private String normalizeImageUrl(String value) {
         String trimmed = normalizeNullable(value);
         if (trimmed == null) {
@@ -841,6 +882,7 @@ public class ProductService {
             String description,
             String imageUrl,
             BigDecimal price,
+            BigDecimal discountPercent,
             Integer stockQuantity,
             StockState stockState,
             String brand,

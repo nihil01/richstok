@@ -3,10 +3,6 @@ export type StockState = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 export type Product = {
   id: number;
   name: string;
-  promoTag?: string;
-  promoTitle?: string;
-  promoSubtitle?: string;
-  promoSlides?: Array<{title: string; description: string; action: string}>;
   slug: string;
   sku: string;
   category: string;
@@ -14,6 +10,9 @@ export type Product = {
   description: string | null;
   imageUrl: string | null;
   price: number;
+  discountPercent?: number;
+  discountedPrice?: number;
+  hasDiscount?: boolean;
   stockQuantity: number;
   stockState: StockState;
   model?: string | null;
@@ -34,6 +33,7 @@ export type ProductPayload = {
   description: string;
   imageUrl: string;
   price: number;
+  discountPercent: number;
   stockQuantity: number;
   stockState: StockState;
   brand: string;

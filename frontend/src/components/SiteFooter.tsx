@@ -134,7 +134,6 @@ export default function SiteFooter({language, baseCode, rates}: SiteFooterProps)
             <Link to="/" className="theme-text transition hover:translate-x-1 hover:text-brand-200">{ui.links.store}</Link>
             <Link to="/cart" className="theme-text transition hover:translate-x-1 hover:text-brand-200">{ui.links.cart}</Link>
             <Link to="/account" className="theme-text transition hover:translate-x-1 hover:text-brand-200">{ui.links.account}</Link>
-            <Link to="/admin" className="theme-text transition hover:translate-x-1 hover:text-brand-200">{ui.links.admin}</Link>
           </div>
         </div>
 

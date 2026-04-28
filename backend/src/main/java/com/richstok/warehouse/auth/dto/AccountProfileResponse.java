@@ -2,6 +2,8 @@ package com.richstok.warehouse.auth.dto;
 
 import com.richstok.warehouse.auth.UserRole;
 
+import java.math.BigDecimal;
+
 public record AccountProfileResponse(
         Long id,
         String email,
@@ -14,6 +16,9 @@ public record AccountProfileResponse(
         String addressLine2,
         String city,
         String postalCode,
-        String country
+        String country,
+        BigDecimal debtLimit,
+        BigDecimal currentDebt,
+        BigDecimal availableDebt
 ) {
 }

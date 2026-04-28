@@ -11,17 +11,18 @@ type AdminOrdersReportCardProps = {
   language: Language;
   displayCurrency: DisplayCurrency;
   currencyRates: Record<string, number>;
-  mode?: "report" | "management";
+  mode?: "report" | "actions";
 };
 
-const REPORT_STATUSES: OrderStatusFilter[] = ["ALL", "PENDING", "COMPLETED", "PARTIALLY_RETURNED", "CANCELLED", "RETURNED"];
-const MANAGEMENT_STATUSES: OrderStatusFilter[] = ["ALL", "PENDING", "COMPLETED", "CANCELLED"];
+const ORDER_STATUSES: OrderStatusFilter[] = ["ALL", "PENDING", "COMPLETED", "PARTIALLY_RETURNED", "CANCELLED", "RETURNED"];
 
 const reportCopy: Record<
   Language,
   {
     title: string;
     subtitle: string;
+    actionsTitle: string;
+    actionsSubtitle: string;
     filters: {query: string; status: string; fromDate: string; toDate: string; reset: string};
     summary: {orders: string; items: string; revenue: string; avgOrder: string};
     listTitle: string;
@@ -39,8 +40,10 @@ const reportCopy: Record<
     sku: string;
     qty: string;
     returned: string;
+    itemNote: string;
     reason: string;
-    actions: {approve: string; reject: string; processing: string};
+    paymentModes: {cash: string; debt: string};
+    actions: {approveCash: string; approveDebt: string; reject: string; processing: string};
     pagination: {page: string; prev: string; next: string};
     statusLabel: Record<OrderStatusFilter, string>;
     statusTone: Record<OrderStatus, string>;
@@ -49,6 +52,8 @@ const reportCopy: Record<
   az: {
     title: "Sifariş hesabatı",
     subtitle: "Bütün sifarişləri, müştəri məlumatlarını və dövr üzrə gəlirləri izləyin.",
+    actionsTitle: "Sifariş idarəetməsi",
+    actionsSubtitle: "Gözləmədə olan sifarişləri təsdiq et və ya ləğv et.",
     filters: {query: "Müştəri / email / invoice", status: "Status", fromDate: "Tarixdən", toDate: "Tarixədək", reset: "Filtrləri sıfırla"},
     summary: {orders: "sifariş", items: "məhsul vahidi", revenue: "ümumi gəlir", avgOrder: "orta çek"},
     listTitle: "Sifarişlər siyahısı",
@@ -66,23 +71,21 @@ const reportCopy: Record<
     sku: "Brand code",
     qty: "Say",
     returned: "Qaytarılıb",
+    itemNote: "Qeyd",
     reason: "Səbəb",
-    actions: {approve: "Qəbul et", reject: "Ləğv et", processing: "Yenilənir..."},
+    paymentModes: {cash: "Nağd", debt: "Borc"},
+    actions: {approveCash: "İcra et (nağd)", approveDebt: "İcra et (borc)", reject: "İmtina et", processing: "Yenilənir..."},
     pagination: {page: "Səhifə", prev: "Əvvəlki", next: "Növbəti"},
-      statusLabel: {
-        ALL: "Hamısı",
-        PENDING: "Gözləmədə",
-        PROCESSING: "İcrada",
-        SHIPPED: "Yoldadır",
-        COMPLETED: "Qəbul edildi",
-        PARTIALLY_RETURNED: "Qismən geri qaytarılıb",
-        CANCELLED: "Ləğv edildi",
-        RETURNED: "Geri qaytarıldı"
-      },
+    statusLabel: {
+      ALL: "Hamısı",
+      PENDING: "Gözləmədə",
+      COMPLETED: "Tamamlandı",
+      PARTIALLY_RETURNED: "Qismən geri qaytarılıb",
+      CANCELLED: "Ləğv edildi",
+      RETURNED: "Geri qaytarıldı"
+    },
     statusTone: {
       PENDING: "bg-amber-500/10 border-amber-400/30 text-amber-200",
-      PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
-      SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
       PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
@@ -92,6 +95,8 @@ const reportCopy: Record<
   en: {
     title: "Orders reporting",
     subtitle: "Track all orders, customer data, and revenue by period.",
+    actionsTitle: "Order management",
+    actionsSubtitle: "Approve or cancel pending orders.",
     filters: {query: "Customer / email / invoice", status: "Status", fromDate: "From", toDate: "To", reset: "Reset filters"},
     summary: {orders: "orders", items: "items sold", revenue: "total revenue", avgOrder: "average order"},
     listTitle: "Orders list",
@@ -109,23 +114,21 @@ const reportCopy: Record<
     sku: "Brand code",
     qty: "Qty",
     returned: "Returned",
+    itemNote: "Note",
     reason: "Reason",
-    actions: {approve: "Accept", reject: "Cancel", processing: "Updating..."},
+    paymentModes: {cash: "Cash", debt: "Debt"},
+    actions: {approveCash: "Approve (cash)", approveDebt: "Approve (debt)", reject: "Reject", processing: "Updating..."},
     pagination: {page: "Page", prev: "Previous", next: "Next"},
-      statusLabel: {
-        ALL: "All",
-        PENDING: "Pending",
-        PROCESSING: "Processing",
-        SHIPPED: "Shipped",
-        COMPLETED: "Accepted",
-        PARTIALLY_RETURNED: "Partially returned",
-        CANCELLED: "Cancelled",
-        RETURNED: "Returned"
-      },
+    statusLabel: {
+      ALL: "All",
+      PENDING: "Pending",
+      COMPLETED: "Completed",
+      PARTIALLY_RETURNED: "Partially returned",
+      CANCELLED: "Cancelled",
+      RETURNED: "Returned"
+    },
     statusTone: {
       PENDING: "bg-amber-500/10 border-amber-400/30 text-amber-200",
-      PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
-      SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
       PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
@@ -135,6 +138,8 @@ const reportCopy: Record<
   ru: {
     title: "Отчетность по заказам",
     subtitle: "Контроль всех заказов, данных клиента и дохода за период.",
+    actionsTitle: "Управление заказами",
+    actionsSubtitle: "Исполняй или отменяй заказы в ожидании.",
     filters: {query: "Клиент / email / invoice", status: "Статус", fromDate: "От", toDate: "До", reset: "Сбросить фильтры"},
     summary: {orders: "заказов", items: "продано позиций", revenue: "общий доход", avgOrder: "средний чек"},
     listTitle: "Список заказов",
@@ -152,23 +157,21 @@ const reportCopy: Record<
     sku: "Brand code",
     qty: "Кол-во",
     returned: "Возвращено",
+    itemNote: "Заметка",
     reason: "Причина",
-    actions: {approve: "Принять", reject: "Отменить", processing: "Обновление..."},
+    paymentModes: {cash: "Наличные", debt: "Долг"},
+    actions: {approveCash: "Исполнить (наличные)", approveDebt: "Исполнить (в долг)", reject: "Отклонить", processing: "Обновление..."},
     pagination: {page: "Страница", prev: "Назад", next: "Вперед"},
-      statusLabel: {
-        ALL: "Все",
-        PENDING: "Ожидает",
-        PROCESSING: "В обработке",
-        SHIPPED: "Отправлен",
-        COMPLETED: "Принят",
-        PARTIALLY_RETURNED: "Частичный возврат",
-        CANCELLED: "Отменен",
-        RETURNED: "Возврат"
-      },
+    statusLabel: {
+      ALL: "Все",
+      PENDING: "Ожидает",
+      COMPLETED: "Завершен",
+      PARTIALLY_RETURNED: "Частичный возврат",
+      CANCELLED: "Отменен",
+      RETURNED: "Возврат"
+    },
     statusTone: {
       PENDING: "bg-amber-500/10 border-amber-400/30 text-amber-200",
-      PROCESSING: "bg-blue-500/10 border-blue-400/30 text-blue-200",
-      SHIPPED: "bg-cyan-500/10 border-cyan-400/30 text-cyan-200",
       COMPLETED: "bg-emerald-500/10 border-emerald-400/30 text-emerald-200",
       PARTIALLY_RETURNED: "bg-violet-500/10 border-violet-400/30 text-violet-200",
       CANCELLED: "bg-rose-500/10 border-rose-400/30 text-rose-200",
@@ -177,33 +180,13 @@ const reportCopy: Record<
   }
 };
 
-const managementHeadingCopy: Record<Language, {title: string; subtitle: string; listTitle: string}> = {
-  az: {
-    title: "Sifariş idarəetməsi",
-    subtitle: "Sifarişləri gözləmədə, qəbul edildi və ləğv edildi statuslarında idarə edin.",
-    listTitle: "İdarə olunacaq sifarişlər"
-  },
-  en: {
-    title: "Order management",
-    subtitle: "Manage orders in waiting, accepted, and cancelled statuses.",
-    listTitle: "Orders to manage"
-  },
-  ru: {
-    title: "Управление заказами",
-    subtitle: "Управляй заказами в статусах ожидания, принятия и отмены.",
-    listTitle: "Заказы для управления"
-  }
-};
-
 export default function AdminOrdersReportCard({language, displayCurrency, currencyRates, mode = "report"}: AdminOrdersReportCardProps) {
   const copy = reportCopy[language];
-  const managementCopy = managementHeadingCopy[language];
-  const isManagement = mode === "management";
-  const orderStatuses = isManagement ? MANAGEMENT_STATUSES : REPORT_STATUSES;
+  const isActionsMode = mode === "actions";
   const locale = language === "ru" ? "ru-RU" : language === "en" ? "en-GB" : "az-Latn-AZ";
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<OrderStatusFilter>("ALL");
+  const [status, setStatus] = useState<OrderStatusFilter>(isActionsMode ? "PENDING" : "ALL");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(0);
@@ -231,13 +214,8 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
   }, [copy.loadError, page, query, status, fromDate, toDate]);
 
   useEffect(() => {
-    if (isManagement) {
-      setSummary(null);
-      setSummaryLoading(false);
-      return;
-    }
     void loadSummary();
-  }, [isManagement, query, status, fromDate, toDate]);
+  }, [query, status, fromDate, toDate]);
 
   async function loadOrdersPage() {
     try {
@@ -287,11 +265,11 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
     }
   }
 
-  async function handleOrderStatusUpdate(orderId: number, nextStatus: OrderStatus) {
+  async function handleOrderStatusUpdate(orderId: number, nextStatus: OrderStatus, recordAsDebt?: boolean) {
     try {
       setStatusUpdatingId(orderId);
       setError(null);
-      const updated = await updateAdminOrderStatus(orderId, {status: nextStatus});
+      const updated = await updateAdminOrderStatus(orderId, {status: nextStatus, recordAsDebt});
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(updated);
       }
@@ -306,7 +284,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
   function resetFilters() {
     setQueryInput("");
     setQuery("");
-    setStatus("ALL");
+    setStatus(isActionsMode ? "PENDING" : "ALL");
     setFromDate("");
     setToDate("");
     setPage(0);
@@ -325,8 +303,8 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
     <section className="glass-card space-y-5 rounded-3xl p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="theme-heading text-xl font-semibold">{isManagement ? managementCopy.title : copy.title}</h2>
-          <p className="theme-text mt-1 text-sm">{isManagement ? managementCopy.subtitle : copy.subtitle}</p>
+          <h2 className="theme-heading text-xl font-semibold">{isActionsMode ? copy.actionsTitle : copy.title}</h2>
+          <p className="theme-text mt-1 text-sm">{isActionsMode ? copy.actionsSubtitle : copy.subtitle}</p>
         </div>
         <button type="button" onClick={resetFilters} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300">
           {copy.filters.reset}
@@ -348,13 +326,17 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
           <select
             value={status}
             onChange={(event) => {
+              if (isActionsMode) {
+                return;
+              }
               setStatus(event.target.value as OrderStatusFilter);
               setPage(0);
             }}
-            className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
+            disabled={isActionsMode}
+            className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300 disabled:cursor-not-allowed disabled:opacity-70"
             aria-label={copy.filters.status}
           >
-            {orderStatuses.map((item) => (
+            {ORDER_STATUSES.map((item) => (
               <option key={item} value={item}>
                 {copy.statusLabel[item]}
               </option>
@@ -391,7 +373,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
         </label>
       </div>
 
-      {!isManagement && (
+      {!isActionsMode && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile
             title={copy.summary.orders}
@@ -417,7 +399,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
       )}
 
       <div>
-        <h3 className="theme-heading text-lg font-semibold">{isManagement ? managementCopy.listTitle : copy.listTitle}</h3>
+        <h3 className="theme-heading text-lg font-semibold">{copy.listTitle}</h3>
         {error && <p className="mt-3 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
         {loading && <p className="theme-text mt-3">{copy.loading}</p>}
         {!loading && !error && (ordersPage?.content.length ?? 0) === 0 && <p className="theme-text mt-3">{copy.empty}</p>}
@@ -442,15 +424,23 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${copy.statusTone[order.status]}`}>
                       {copy.statusLabel[order.status]}
                     </span>
-                    {isManagement && order.status === "PENDING" && (
+                    {order.status === "PENDING" && (
                       <>
                         <button
                           type="button"
                           disabled={statusUpdatingId === order.id}
-                          onClick={() => void handleOrderStatusUpdate(order.id, "COMPLETED")}
+                          onClick={() => void handleOrderStatusUpdate(order.id, "COMPLETED", false)}
                           className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {statusUpdatingId === order.id ? copy.actions.processing : copy.actions.approve}
+                          {statusUpdatingId === order.id ? copy.actions.processing : copy.actions.approveCash}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === order.id}
+                          onClick={() => void handleOrderStatusUpdate(order.id, "COMPLETED", true)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-brand-400/35 bg-brand-500/10 px-2.5 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === order.id ? copy.actions.processing : copy.actions.approveDebt}
                         </button>
                         <button
                           type="button"
@@ -476,6 +466,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                   <span>ID: {order.userId}</span>
                   <span>{order.city}, {order.country}</span>
                   <span>{order.itemCount} pcs</span>
+                  <span>{order.recordedAsDebt ? copy.paymentModes.debt : copy.paymentModes.cash}</span>
                   <span className="font-medium">{formatConvertedPrice(order.totalAmount, displayCurrency, currencyRates, language)}</span>
                 </div>
               </motion.div>
@@ -560,15 +551,23 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${copy.statusTone[selectedOrder.status]}`}>
                       {copy.statusLabel[selectedOrder.status]}
                     </span>
-                    {isManagement && selectedOrder.status === "PENDING" && (
+                    {selectedOrder.status === "PENDING" && (
                       <>
                         <button
                           type="button"
                           disabled={statusUpdatingId === selectedOrder.id}
-                          onClick={() => void handleOrderStatusUpdate(selectedOrder.id, "COMPLETED")}
+                          onClick={() => void handleOrderStatusUpdate(selectedOrder.id, "COMPLETED", false)}
                           className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {statusUpdatingId === selectedOrder.id ? copy.actions.processing : copy.actions.approve}
+                          {statusUpdatingId === selectedOrder.id ? copy.actions.processing : copy.actions.approveCash}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={statusUpdatingId === selectedOrder.id}
+                          onClick={() => void handleOrderStatusUpdate(selectedOrder.id, "COMPLETED", true)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-brand-400/35 bg-brand-500/10 px-2.5 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {statusUpdatingId === selectedOrder.id ? copy.actions.processing : copy.actions.approveDebt}
                         </button>
                         <button
                           type="button"
@@ -594,7 +593,7 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                         selectedOrder.postalCode || "-"
                       ]}
                     />
-                    <InfoCard title={copy.note} lines={[selectedOrder.comment || "-"]} />
+                    <InfoCard title={copy.note} lines={[selectedOrder.comment || "-", selectedOrder.recordedAsDebt ? copy.paymentModes.debt : copy.paymentModes.cash]} />
                   </div>
 
                   <div className="rounded-2xl border border-white/10 p-3">
@@ -608,6 +607,9 @@ export default function AdminOrdersReportCard({language, displayCurrency, curren
                               <p className="theme-muted text-xs">{copy.sku}: {item.productSku}</p>
                               {item.returnedQuantity > 0 && (
                                 <p className="theme-muted text-xs">{copy.returned}: {item.returnedQuantity}</p>
+                              )}
+                              {item.customerNote && (
+                                <p className="theme-muted whitespace-pre-line text-xs">{copy.itemNote}: {item.customerNote}</p>
                               )}
                               {item.returnReason && (
                                 <p className="theme-muted whitespace-pre-line text-xs">{copy.reason}: {item.returnReason}</p>

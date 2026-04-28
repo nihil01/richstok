@@ -19,6 +19,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -29,6 +30,7 @@ import java.util.List;
 @Table(name = "orders")
 @Getter
 @Setter
+@ToString
 public class OrderRecord {
 
     @Id
@@ -68,8 +70,8 @@ public class OrderRecord {
     @Column(nullable = false, length = 3)
     private String currencyCode;
 
-    @Column(name = "customer_language", nullable = false, length = 8)
-    private String customerLanguage;
+    @Column(name = "recorded_as_debt", nullable = false)
+    private boolean recordedAsDebt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -83,6 +85,9 @@ public class OrderRecord {
 
     @Column(nullable = false)
     private OffsetDateTime updatedAt;
+
+    @Column(name="customer_language", nullable = false)
+    private String lang;
 
     @PrePersist
     void onCreate() {

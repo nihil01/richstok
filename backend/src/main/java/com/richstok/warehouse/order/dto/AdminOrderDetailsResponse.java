@@ -23,6 +23,7 @@ public record AdminOrderDetailsResponse(
         BigDecimal totalAmount,
         Integer itemCount,
         String currencyCode,
+        boolean recordedAsDebt,
         OrderStatus status,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,

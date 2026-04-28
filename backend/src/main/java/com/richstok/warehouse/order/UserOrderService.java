@@ -4,6 +4,7 @@ import com.richstok.warehouse.auth.AppUser;
 import com.richstok.warehouse.auth.UserInfo;
 import com.richstok.warehouse.common.NotFoundException;
 import com.richstok.warehouse.common.dto.PageResponse;
+import com.richstok.warehouse.debt.UserDebtService;
 import com.richstok.warehouse.order.dto.UserOrderDetailsResponse;
 import com.richstok.warehouse.order.dto.UserOrderItemResponse;
 import com.richstok.warehouse.order.dto.UserOrderListItemResponse;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -36,32 +39,33 @@ public class UserOrderService {
 
     private final OrderRecordRepository orderRecordRepository;
     private final ProductRepository productRepository;
+    private final UserDebtService userDebtService;
 
     @Transactional(readOnly = true)
-    public PageResponse<UserOrderListItemResponse> getMyOrders(Long userId, int page, int size, String query) {
+    public PageResponse<UserOrderListItemResponse> getMyOrders(Long userId, int page, int size, String query, String scope) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.clamp(size, 1, 20);
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Specification<OrderRecord> specification = buildUserOrdersSpecification(userId, query);
+        Specification<OrderRecord> specification = buildUserOrdersSpecification(userId, query, scope);
         Page<UserOrderListItemResponse> mappedPage = orderRecordRepository.findAll(specification, pageable)
-            .map(order -> new UserOrderListItemResponse(
-                order.getId(),
-                order.getInvoiceNumber(),
-                order.getTotalAmount(),
-                order.getItemCount(),
-                order.getCurrencyCode(),
-                order.getStatus(),
-                order.getCreatedAt()
-            ));
+                .map(order -> new UserOrderListItemResponse(
+                        order.getId(),
+                        order.getInvoiceNumber(),
+                        order.getTotalAmount(),
+                        order.getItemCount(),
+                        order.getCurrencyCode(),
+                        order.getStatus(),
+                        order.getCreatedAt()
+                ));
 
         return new PageResponse<>(
-            mappedPage.getContent(),
-            mappedPage.getNumber(),
-            mappedPage.getSize(),
-            mappedPage.getTotalElements(),
-            mappedPage.getTotalPages(),
-            mappedPage.isLast()
+                mappedPage.getContent(),
+                mappedPage.getNumber(),
+                mappedPage.getSize(),
+                mappedPage.getTotalElements(),
+                mappedPage.getTotalPages(),
+                mappedPage.isLast()
         );
     }
 
@@ -92,16 +96,21 @@ public class UserOrderService {
             throw new IllegalArgumentException("All items in this order are already returned.");
         }
 
+        BigDecimal refundAmount = BigDecimal.ZERO;
         restoreStock(quantitiesToRestore);
         for (OrderItemRecord item : order.getItems()) {
             int returnableQuantity = resolveReturnableQuantity(item);
             if (returnableQuantity <= 0) {
                 continue;
             }
+            refundAmount = refundAmount.add(calculateRefundAmount(item, returnableQuantity));
             item.setReturnedQuantity(normalizeReturnedQuantity(item.getReturnedQuantity()) + returnableQuantity);
             appendReturnReason(item, returnableQuantity, null);
         }
         refreshOrderStatus(order);
+        if (order.isRecordedAsDebt()) {
+            userDebtService.reduceDebt(order.getUserId(), refundAmount);
+        }
 
         OrderRecord savedOrder = orderRecordRepository.save(order);
         return toDetailsResponse(savedOrder);
@@ -140,9 +149,13 @@ public class UserOrderService {
         if (item.getProductId() != null) {
             restoreStock(Map.of(item.getProductId(), quantityToReturn));
         }
+        BigDecimal refundAmount = calculateRefundAmount(item, quantityToReturn);
         item.setReturnedQuantity(normalizeReturnedQuantity(item.getReturnedQuantity()) + quantityToReturn);
         appendReturnReason(item, quantityToReturn, reason);
         refreshOrderStatus(order);
+        if (order.isRecordedAsDebt()) {
+            userDebtService.reduceDebt(order.getUserId(), refundAmount);
+        }
 
         OrderRecord savedOrder = orderRecordRepository.save(order);
         return toDetailsResponse(savedOrder);
@@ -163,6 +176,7 @@ public class UserOrderService {
                         item.getUnitPrice(),
                         item.getLineTotal(),
                         resolveProductImage(item),
+                        item.getCustomerNote(),
                         item.getReturnReason()
                 ))
                 .toList();
@@ -187,11 +201,20 @@ public class UserOrderService {
         );
     }
 
-    private Specification<OrderRecord> buildUserOrdersSpecification(Long userId, String query) {
+    private Specification<OrderRecord> buildUserOrdersSpecification(Long userId, String query, String scope) {
         return (root, queryDef, criteriaBuilder) -> {
             queryDef.distinct(true);
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.equal(root.get("userId"), userId));
+
+            OrderListScope orderListScope = resolveOrderListScope(scope);
+            if (orderListScope == OrderListScope.PENDING) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), OrderStatus.PENDING));
+            } else if (orderListScope == OrderListScope.HISTORY) {
+                predicates.add(criteriaBuilder.notEqual(root.get("status"), OrderStatus.PENDING));
+            } else if (orderListScope == OrderListScope.RETURNS) {
+                predicates.add(root.get("status").in(OrderStatus.COMPLETED, OrderStatus.PARTIALLY_RETURNED, OrderStatus.RETURNED));
+            }
 
             if (hasText(query)) {
                 String normalized = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
@@ -212,6 +235,17 @@ public class UserOrderService {
         };
     }
 
+    private OrderListScope resolveOrderListScope(String scopeRaw) {
+        if (!hasText(scopeRaw)) {
+            return OrderListScope.ALL;
+        }
+        try {
+            return OrderListScope.valueOf(scopeRaw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return OrderListScope.ALL;
+        }
+    }
+
     private void ensureOrderIsReturnable(OrderRecord order) {
         if (order.getStatus() == OrderStatus.RETURNED) {
             throw new IllegalArgumentException("This order is already returned.");
@@ -220,7 +254,6 @@ public class UserOrderService {
             throw new IllegalArgumentException("Cancelled orders cannot be returned.");
         }
         if (order.getStatus() != OrderStatus.COMPLETED
-                && order.getStatus() != OrderStatus.SHIPPED
                 && order.getStatus() != OrderStatus.PARTIALLY_RETURNED) {
             throw new IllegalArgumentException("Only shipped or completed orders can be returned.");
         }
@@ -334,6 +367,27 @@ public class UserOrderService {
         return returnedQuantity == null ? 0 : Math.max(returnedQuantity, 0);
     }
 
+    private BigDecimal calculateRefundAmount(OrderItemRecord item, int quantityToReturn) {
+        if (quantityToReturn <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal unitPrice = item.getUnitPrice();
+        if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal lineTotal = item.getLineTotal() == null ? BigDecimal.ZERO : item.getLineTotal();
+            int orderedQuantity = normalizeQuantity(item.getQuantity());
+            if (orderedQuantity > 0) {
+                unitPrice = lineTotal.divide(BigDecimal.valueOf(orderedQuantity), 2, RoundingMode.HALF_UP);
+            } else {
+                unitPrice = BigDecimal.ZERO;
+            }
+        }
+
+        return unitPrice
+                .multiply(BigDecimal.valueOf(quantityToReturn))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
     private String normalizeNullable(String value) {
         if (value == null) {
             return null;
@@ -344,5 +398,12 @@ public class UserOrderService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private enum OrderListScope {
+        ALL,
+        PENDING,
+        HISTORY,
+        RETURNS
     }
 }

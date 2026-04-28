@@ -12,5 +12,7 @@ WORKDIR /app
 
 COPY --from=build /workspace/target/*.jar /app/app.jar
 COPY src/main/resources/static/brands /app/static/brands
+COPY src/main/resources/static/assets/hero /app/static/hero
+
 
 ENTRYPOINT ["sh", "-c", "java -jar /app/app.jar"]

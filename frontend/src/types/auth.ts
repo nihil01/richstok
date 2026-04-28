@@ -18,6 +18,9 @@ export type AdminManagedUser = {
   email: string;
   role: UserRole;
   active: boolean;
+  debtLimit: number;
+  currentDebt: number;
+  availableDebt: number;
   createdAt: string;
 };
 
@@ -44,6 +47,9 @@ export type AccountProfile = {
   city: string | null;
   postalCode: string | null;
   country: string | null;
+  debtLimit: number;
+  currentDebt: number;
+  availableDebt: number;
 };
 
 export type AccountProfilePayload = {

@@ -1,4 +1,5 @@
 import {createProduct, deleteProduct, fetchAdminProducts, importProductsExcel, updateProduct} from "@/api/client";
+import AdminDebtsCard from "@/components/AdminDebtsCard";
 import AdminOrdersReportCard from "@/components/AdminOrdersReportCard";
 import AdminUsersCard from "@/components/AdminUsersCard";
 import type {DisplayCurrency} from "@/types/currency";
@@ -6,7 +7,7 @@ import type {Product, ProductBulkImportResponse, ProductPayload, StockState} fro
 import type {Language} from "@/types/ui";
 import {formatConvertedPrice} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {BarChart3, Boxes, CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, FileSpreadsheet, ImagePlus, Pencil, Search, Shield, Trash2, UploadCloud, X} from "lucide-react";
+import {BarChart3, Boxes, CheckCheck, ChevronLeft, ChevronRight, CircleDollarSign, FileSpreadsheet, ImagePlus, Pencil, Search, Shield, Trash2, UploadCloud, X} from "lucide-react";
 import type {ChangeEvent, ComponentType, FormEvent} from "react";
 import {useEffect, useMemo, useState} from "react";
 
@@ -19,6 +20,7 @@ const initialForm: ProductPayload = {
   description: "",
   imageUrl: "",
   price: 0,
+  discountPercent: 0,
   stockQuantity: 0,
   stockState: "IN_STOCK",
   brand: "",
@@ -29,7 +31,7 @@ const initialForm: ProductPayload = {
 };
 
 const PRODUCTS_PER_PAGE = 20;
-type AdminTab = "catalog" | "orders" | "orderManagement" | "users";
+type AdminTab = "catalog" | "workflow" | "orders" | "users" | "debts";
 
 const adminCopy: Record<
   Language,
@@ -54,6 +56,7 @@ const adminCopy: Record<
       unknownCount: string;
       deliveryDays: string;
       price: string;
+      discountPercent: string;
       stock: string;
       stockState: string;
       description: string;
@@ -102,9 +105,10 @@ const adminCopy: Record<
     statCaptions: ["kataloqda", "ümumi qalıq", "anbar dəyəri", "aşağı stok"],
     tabs: {
       catalog: "Kataloq",
+      workflow: "Sifariş idarəetməsi",
       orders: "Sifariş hesabatı",
-      orderManagement: "Sifariş idarəetməsi",
-      users: "İstifadəçilər"
+      users: "İstifadəçilər",
+      debts: "Borc limitləri"
     },
     formTitle: "Məhsul əlavə et",
     formSubtitle: "Manual əlavə və bulk import üçün eyni sahələr istifadə olunur.",
@@ -118,6 +122,7 @@ const adminCopy: Record<
       unknownCount: "Dəqiq say məlum deyil (var / az var)",
       deliveryDays: "Çatdırılma günləri (GUN)",
       price: "Qiymət",
+      discountPercent: "Endirim (%)",
       stock: "Qalıq",
       stockState: "Stok statusu",
       description: "Təsvir",
@@ -182,9 +187,10 @@ const adminCopy: Record<
     statCaptions: ["in catalog", "total stock", "inventory value", "low stock"],
     tabs: {
       catalog: "Catalog",
+      workflow: "Order actions",
       orders: "Orders report",
-      orderManagement: "Order management",
-      users: "Users"
+      users: "Users",
+      debts: "Debt limits"
     },
     formTitle: "Add product",
     formSubtitle: "Manual and bulk import use the same product fields.",
@@ -198,6 +204,7 @@ const adminCopy: Record<
       unknownCount: "Exact quantity is unknown (var / az var)",
       deliveryDays: "Delivery days (GUN)",
       price: "Price",
+      discountPercent: "Discount (%)",
       stock: "Stock",
       stockState: "Stock state",
       description: "Description",
@@ -262,9 +269,10 @@ const adminCopy: Record<
     statCaptions: ["в каталоге", "общий остаток", "оценка склада", "низкий остаток"],
     tabs: {
       catalog: "Каталог",
+      workflow: "Управление заказами",
       orders: "Отчет по заказам",
-      orderManagement: "Управление заказами",
-      users: "Пользователи"
+      users: "Пользователи",
+      debts: "Лимиты долга"
     },
     formTitle: "Добавить товар",
     formSubtitle: "Ручное добавление и массовый импорт используют одинаковые поля.",
@@ -278,6 +286,7 @@ const adminCopy: Record<
       unknownCount: "Точное количество неизвестно (var / az var)",
       deliveryDays: "Срок доставки, дней (GUN)",
       price: "Цена",
+      discountPercent: "Скидка (%)",
       stock: "Остаток",
       model: "Модель",
       stockState: "Статус наличия",
@@ -337,9 +346,10 @@ const adminCopy: Record<
 
 const adminTabs: Array<{id: AdminTab; icon: typeof Boxes}> = [
   {id: "catalog", icon: Boxes},
+  {id: "workflow", icon: CheckCheck},
   {id: "orders", icon: BarChart3},
-  {id: "orderManagement", icon: CheckCircle2},
-  {id: "users", icon: Shield}
+  {id: "users", icon: Shield},
+  {id: "debts", icon: CircleDollarSign}
 ];
 
 type AdminPageProps = {
@@ -479,7 +489,8 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
         product.sku,
         product.category,
         product.unknownCount ? "unknown var az var" : "",
-        String(product.deliveryDays ?? "")
+        String(product.deliveryDays ?? ""),
+        String(product.discountPercent ?? 0)
       ]
         .join(" ")
         .toLowerCase()
@@ -541,7 +552,7 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
       </div>
 
       <section className="glass-card rounded-2xl p-3">
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {adminTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -639,6 +650,12 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                   type="number"
                   value={String(form.price)}
                   onChange={(value) => setForm((prev) => ({...prev, price: Number(value)}))}
+                />
+                <Input
+                  label={copy.fields.discountPercent}
+                  type="number"
+                  value={String(form.discountPercent)}
+                  onChange={(value) => setForm((prev) => ({...prev, discountPercent: Number(value || 0)}))}
                 />
                 <Input
                   label={copy.fields.stock}
@@ -790,7 +807,7 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                                   slug: {product.slug} · brand code: {product.sku}
                                 </p>
                                 <p className="theme-text mt-1 text-sm">
-                                  {product.category} · {product.oemNumber || "OEM"} · {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)} · {product.stockQuantity} {copy.unitShort} · {copy.stockStateOptions[product.stockState]} · {product.brand || "OEM"} · {product.deliveryDays ?? "—"} {copy.daysShort} {product.unknownCount ? "· var / az var" : ""}
+                                  {product.category} · {product.oemNumber || "OEM"} · {formatConvertedPrice(product.discountedPrice ?? product.price, displayCurrency, currencyRates, language)}{(product.hasDiscount && (product.discountPercent ?? 0) > 0) ? ` (-${product.discountPercent}%)` : ""} · {product.stockQuantity} {copy.unitShort} · {copy.stockStateOptions[product.stockState]} · {product.brand || "OEM"} · {product.deliveryDays ?? "—"} {copy.daysShort} {product.unknownCount ? "· var / az var" : ""}
                                 </p>
                               </div>
                             </div>
@@ -834,19 +851,19 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                           type="button"
                           onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                           disabled={currentPage <= 1}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-sm theme-text transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <ChevronLeft className="h-4 w-4" />
                           {copy.pagination.prev}
                         </button>
-                        <p className="rounded-xl border border-white/12 bg-brand-500/8 px-3 py-2 text-xs font-medium theme-text">
+                        <p className="theme-text text-sm">
                           {copy.pagination.page} {currentPage} / {totalPages}
                         </p>
                         <button
                           type="button"
                           onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                           disabled={currentPage >= totalPages}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/12 px-3.5 py-2 text-sm font-semibold text-brand-100 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition hover:border-brand-400 hover:bg-brand-500/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-sm theme-text transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {copy.pagination.next}
                           <ChevronRight className="h-4 w-4" />
@@ -868,19 +885,19 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
             exit={{opacity: 0, y: -8}}
             transition={{duration: 0.25}}
           >
-            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} mode="report" />
+            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
           </motion.section>
         )}
 
-        {activeTab === "orderManagement" && (
+        {activeTab === "workflow" && (
           <motion.section
-            key="admin-tab-orders-management"
+            key="admin-tab-workflow"
             initial={{opacity: 0, y: 8}}
             animate={{opacity: 1, y: 0}}
             exit={{opacity: 0, y: -8}}
             transition={{duration: 0.25}}
           >
-            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} mode="management" />
+            <AdminOrdersReportCard language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} mode="actions" />
           </motion.section>
         )}
 
@@ -893,6 +910,18 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
             transition={{duration: 0.25}}
           >
             <AdminUsersCard language={language} />
+          </motion.section>
+        )}
+
+        {activeTab === "debts" && (
+          <motion.section
+            key="admin-tab-debts"
+            initial={{opacity: 0, y: 8}}
+            animate={{opacity: 1, y: 0}}
+            exit={{opacity: 0, y: -8}}
+            transition={{duration: 0.25}}
+          >
+            <AdminDebtsCard language={language} />
           </motion.section>
         )}
       </AnimatePresence>
@@ -939,6 +968,12 @@ export default function AdminPage({language, displayCurrency, currencyRates}: Ad
                   type="number"
                   value={String(editForm.price)}
                   onChange={(value) => setEditForm((prev) => (prev ? {...prev, price: Number(value || 0)} : prev))}
+                />
+                <Input
+                  label={copy.fields.discountPercent}
+                  type="number"
+                  value={String(editForm.discountPercent)}
+                  onChange={(value) => setEditForm((prev) => (prev ? {...prev, discountPercent: Number(value || 0)} : prev))}
                 />
                 <Input
                   label={copy.fields.stock}
@@ -1077,9 +1112,11 @@ function loadImageFromDataUrl(dataUrl: string) {
 
 function prepareProductPayload(payload: ProductPayload): ProductPayload {
   const normalizedStock = Math.max(0, Number.isFinite(payload.stockQuantity) ? payload.stockQuantity : 0);
+  const normalizedDiscount = Math.min(100, Math.max(0, Number.isFinite(payload.discountPercent) ? payload.discountPercent : 0));
 
   return {
     ...payload,
+    discountPercent: Number(normalizedDiscount.toFixed(2)),
     stockQuantity: normalizedStock,
     unknownCount: Boolean(payload.unknownCount)
   };
@@ -1095,6 +1132,7 @@ function toEditablePayload(product: Product): ProductPayload {
     description: product.description ?? "",
     imageUrl: product.imageUrl ?? "",
     price: product.price,
+    discountPercent: product.discountPercent ?? 0,
     stockQuantity: product.stockQuantity,
     stockState: product.stockState,
     brand: product.brand ?? "",

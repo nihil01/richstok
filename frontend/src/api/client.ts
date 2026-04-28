@@ -25,16 +25,14 @@ import type {
   AdminOrderSummary,
   OrderStatusFilter,
   UserOrderDetails,
-  UserOrderPage
+  UserOrderPage,
+  UserOrderScope
 } from "@/types/order";
 
-const configuredApiOriginRaw = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.trim();
-const configuredApiBaseUrlRaw = (
-  (import.meta.env.VITE_API_URL as string | undefined)?.trim()
-  || (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-);
-const configuredApiOrigin = "http://localhost:8080"
-const configuredApiBaseUrl = "http://localhost:8080/api/v1"
+const configuredApiOriginRaw = "http://localhost:8080";
+const configuredApiBaseUrlRaw = "http://localhost:8080/api/v1";
+const configuredApiOrigin = configuredApiOriginRaw ? configuredApiOriginRaw.replace(/\/+$/, "") : "";
+const configuredApiBaseUrl = configuredApiBaseUrlRaw ? configuredApiBaseUrlRaw.replace(/\/+$/, "") : "";
 const isLocalBrowser =
   typeof window !== "undefined" &&
   (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
@@ -112,17 +110,12 @@ export async function fetchAdminProducts() {
 
 export async function fetchBrandImages() {
   const { data } = await api.get<string[]>("/brands_images");
-  const assetsOrigin = configuredApiOrigin || apiAbsoluteOrigin || (typeof window !== "undefined" ? window.location.origin : "");
+  return resolveAssetUrls(data);
+}
 
-  return data
-      .filter((image): image is string => typeof image === "string" && image.trim().length > 0)
-      .map((image) => {
-        if (/^https?:\/\//i.test(image) || image.startsWith("data:image/")) {
-          return image;
-        }
-        const normalizedPath = image.startsWith("/") ? image : `/${image}`;
-        return assetsOrigin ? `${assetsOrigin}${normalizedPath}` : normalizedPath;
-      });
+export async function fetchHeroSlides() {
+  const { data } = await api.get<string[]>("/hero_slides");
+  return resolveAssetUrls(data);
 }
 
 export async function fetchCurrencyRate() {
@@ -165,6 +158,16 @@ export async function createAdminUser(payload: AdminCreateUserPayload) {
 
 export async function setAdminUserActive(id: number, active: boolean) {
   const {data} = await api.patch<AdminManagedUser>(`/admin/users/${id}/active`, {active});
+  return data;
+}
+
+export async function setAdminUserDebtLimit(id: number, debtLimit: number) {
+  const {data} = await api.patch<AdminManagedUser>(`/admin/users/${id}/debt-limit`, {debtLimit});
+  return data;
+}
+
+export async function resetAdminUserDebtLimit(id: number) {
+  const {data} = await api.patch<AdminManagedUser>(`/admin/users/${id}/debt-limit/reset`);
   return data;
 }
 
@@ -229,12 +232,13 @@ export async function checkoutOrder(payload: CheckoutPayload) {
   return data;
 }
 
-export async function fetchMyOrders(params: {page?: number; size?: number; query?: string} = {}) {
+export async function fetchMyOrders(params: {page?: number; size?: number; query?: string; scope?: UserOrderScope} = {}) {
   const {data} = await api.get<UserOrderPage>("/orders/my", {
     params: {
       page: params.page ?? 0,
       size: params.size ?? 10,
-      query: params.query && params.query.trim().length > 0 ? params.query.trim() : undefined
+      query: params.query && params.query.trim().length > 0 ? params.query.trim() : undefined,
+      scope: params.scope && params.scope !== "ALL" ? params.scope : undefined
     }
   });
   return data;
@@ -325,4 +329,18 @@ function sanitizeRates(rawRates: unknown): Record<string, number> {
     }
     return accumulator;
   }, {});
+}
+
+function resolveAssetUrls(paths: string[]) {
+  const assetsOrigin = configuredApiOrigin || apiAbsoluteOrigin || (typeof window !== "undefined" ? window.location.origin : "");
+
+  return paths
+    .filter((path): path is string => typeof path === "string" && path.trim().length > 0)
+    .map((path) => {
+      if (/^https?:\/\//i.test(path) || path.startsWith("data:image/")) {
+        return path;
+      }
+      const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+      return assetsOrigin ? `${assetsOrigin}${normalizedPath}` : normalizedPath;
+    });
 }

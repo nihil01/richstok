@@ -17,6 +17,7 @@ public record AdminOrderItemResponse(
         BigDecimal lineTotal,
         String imageUrl,
         String stockState,
+        String customerNote,
         String returnReason
 ) {
 }

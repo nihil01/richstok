@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
+import java.math.BigDecimal;
+import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,6 +35,10 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     List<Product> findAllByActiveTrueOrderByCreatedAtDesc();
 
     List<Product> findAllByOrderByCreatedAtDesc();
+
+    List<Product> findByActiveTrueAndDiscountPercentGreaterThan(BigDecimal discountPercent, Pageable pageable);
+
+    List<Product> findByDiscountPercentGreaterThan(BigDecimal discountPercent, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Product p where p.id in :ids")

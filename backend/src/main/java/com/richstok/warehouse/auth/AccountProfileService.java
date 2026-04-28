@@ -2,6 +2,7 @@ package com.richstok.warehouse.auth;
 
 import com.richstok.warehouse.auth.dto.AccountProfileRequest;
 import com.richstok.warehouse.auth.dto.AccountProfileResponse;
+import com.richstok.warehouse.debt.UserDebtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,7 @@ public class AccountProfileService {
 
     private final AppUserRepository appUserRepository;
     private final UserInfoRepository userInfoRepository;
+    private final UserDebtService userDebtService;
 
     @Transactional(readOnly = true)
     public AccountProfileResponse getProfile(AppUser user) {
@@ -52,6 +54,7 @@ public class AccountProfileService {
         String city = userInfo != null ? userInfo.getCity() : user.getCity();
         String postalCode = userInfo != null ? userInfo.getPostalCode() : user.getPostalCode();
         String country = userInfo != null ? userInfo.getCountry() : user.getCountry();
+        UserDebtService.DebtSnapshot debtSnapshot = userDebtService.getDebtSnapshot(user.getId());
 
         return new AccountProfileResponse(
                 user.getId(),
@@ -65,7 +68,10 @@ public class AccountProfileService {
                 addressLine2,
                 city,
                 postalCode,
-                country
+                country,
+                debtSnapshot.debtLimit(),
+                debtSnapshot.currentDebt(),
+                debtSnapshot.availableDebt()
         );
     }
 

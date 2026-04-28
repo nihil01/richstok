@@ -138,6 +138,7 @@ public class AdminOrderReportService {
                 order.getTotalAmount(),
                 order.getItemCount(),
                 order.getCurrencyCode(),
+                order.isRecordedAsDebt(),
                 order.getStatus(),
                 order.getCreatedAt()
         );
@@ -168,6 +169,7 @@ public class AdminOrderReportService {
                 order.getTotalAmount(),
                 order.getItemCount(),
                 order.getCurrencyCode(),
+                order.isRecordedAsDebt(),
                 order.getStatus(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
@@ -196,6 +198,7 @@ public class AdminOrderReportService {
                 item.getLineTotal(),
                 product != null ? product.getImageUrl() : null,
                 stockState,
+                item.getCustomerNote(),
                 item.getReturnReason()
         );
     }

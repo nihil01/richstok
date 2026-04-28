@@ -5,6 +5,7 @@ import com.richstok.warehouse.cart.dto.CartItemResponse;
 import com.richstok.warehouse.cart.dto.CartMergeItemRequest;
 import com.richstok.warehouse.cart.dto.CartResponse;
 import com.richstok.warehouse.product.Product;
+import com.richstok.warehouse.product.ProductPricing;
 import com.richstok.warehouse.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -112,7 +113,9 @@ public class CartService {
                 continue;
             }
             int quantity = Math.max(1, entry.getValue());
-            BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
+            BigDecimal discountPercent = ProductPricing.normalizeDiscountPercent(product.getDiscountPercent());
+            BigDecimal unitPrice = ProductPricing.resolveDiscountedPrice(product.getPrice(), discountPercent);
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
             subtotal = subtotal.add(lineTotal);
             totalItems += quantity;
             items.add(new CartItemResponse(
@@ -122,7 +125,10 @@ public class CartService {
                     product.getImageUrl(),
                     product.getCategory(),
                     product.getBrand(),
+                    unitPrice,
                     product.getPrice(),
+                    discountPercent,
+                    ProductPricing.hasDiscount(discountPercent),
                     quantity,
                     lineTotal,
                     product.getStockState().name(),

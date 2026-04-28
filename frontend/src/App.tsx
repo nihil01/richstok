@@ -1,4 +1,4 @@
-import {fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
+import {changePassword, fetchAccountProfile, fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
 import SiteFooter from "@/components/SiteFooter";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
@@ -10,48 +10,89 @@ import LoginPage from "@/pages/LoginPage";
 import ProductDetailsPage from "@/pages/ProductDetailsPage";
 import PublicGatewayPage from "@/pages/PublicGatewayPage";
 import StorePage from "@/pages/StorePage";
-import type {AuthUser} from "@/types/auth";
+import type {AccountProfile, AuthUser} from "@/types/auth";
 import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language, ThemeMode} from "@/types/ui";
 import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDisplayCurrency} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {CheckCircle2, Coins, LayoutDashboard, LogIn, LogOut, Moon, Settings2, ShoppingBag, ShoppingCart, Sparkles, Sun, User} from "lucide-react";
-import type {ReactNode} from "react";
+import {CheckCircle2, Coins, Eye, EyeOff, Home, LayoutDashboard, LogIn, LogOut, MapPin, Moon, Phone, ReceiptText, RotateCcw, Search, Settings2, ShoppingCart, Sparkles, Sun, UserRound, X} from "lucide-react";
+import type {FormEvent, ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import type {Location} from "react-router-dom";
 import {Link, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom";
-import {UserProfile} from "@/components/UserProfile";
 
 const labels: Record<
-  Language,
-  {
-    store: string;
-    account: string;
-    admin: string;
-    cart: string;
-    language: string;
-    authButton: string;
-    signOut: string;
-    currency: string;
-    themeDark: string;
-    themeLight: string;
-    catalog: string;
-    categories: string;
-    brands: string;
-    adminOnlyTitle: string;
-    adminOnlyBody: string;
-    authOnlyTitle: string;
-    authOnlyBody: string;
-    toStore: string;
-    addedToCart: string;
-  }
+    Language,
+    {
+      store: string;
+      account: string;
+      admin: string;
+      cart: string;
+      home: string;
+      search: string;
+      accountBalance: string;
+      orders: string;
+      returns: string;
+      profile: string;
+      profileDetails: string;
+      address: string;
+      phone: string;
+      noAddress: string;
+      noPhone: string;
+      profileLoadError: string;
+      changePassword: string;
+      currentPassword: string;
+      newPassword: string;
+      repeatPassword: string;
+      savePassword: string;
+      saving: string;
+      passwordMismatch: string;
+      passwordUpdated: string;
+      passwordUpdateError: string;
+      language: string;
+      authButton: string;
+      signOut: string;
+      currency: string;
+      themeDark: string;
+      themeLight: string;
+      catalog: string;
+      categories: string;
+      brands: string;
+      adminOnlyTitle: string;
+      adminOnlyBody: string;
+      authOnlyTitle: string;
+      authOnlyBody: string;
+      toStore: string;
+      addedToCart: string;
+    }
 > = {
   az: {
     store: "Mağaza",
     account: "Kabinet",
     admin: "Admin",
     cart: "Səbət",
+    home: "Əsas səhifə",
+    search: "Axtar",
+    accountBalance: "Cari hesab",
+    orders: "Sifarişlər",
+    returns: "Qaytarma",
+    profile: "Profil",
+    profileDetails: "Profil məlumatları",
+    address: "Ünvan",
+    phone: "Telefon",
+    noAddress: "Ünvan daxil edilməyib",
+    noPhone: "Telefon daxil edilməyib",
+    profileLoadError: "Profil məlumatları yüklənmədi.",
+    changePassword: "Parolu dəyiş",
+    currentPassword: "Cari parol",
+    newPassword: "Yeni parol",
+    repeatPassword: "Yeni parol təkrarı",
+    savePassword: "Yadda saxla",
+    saving: "Yadda saxlanır...",
+    passwordMismatch: "Yeni parollar eyni deyil.",
+    passwordUpdated: "Parol yeniləndi.",
+    passwordUpdateError: "Parolu yeniləmək alınmadı.",
     language: "Dil",
     authButton: "Giriş",
     signOut: "Çıxış",
@@ -73,6 +114,27 @@ const labels: Record<
     account: "Account",
     admin: "Admin",
     cart: "Cart",
+    home: "Home",
+    search: "Search",
+    accountBalance: "Account",
+    orders: "Orders",
+    returns: "Returns",
+    profile: "Profile",
+    profileDetails: "Profile details",
+    address: "Address",
+    phone: "Phone",
+    noAddress: "Address is not set",
+    noPhone: "Phone is not set",
+    profileLoadError: "Failed to load profile details.",
+    changePassword: "Change password",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    repeatPassword: "Repeat password",
+    savePassword: "Save",
+    saving: "Saving...",
+    passwordMismatch: "New passwords do not match.",
+    passwordUpdated: "Password updated.",
+    passwordUpdateError: "Failed to update password.",
     language: "Language",
     authButton: "Login",
     signOut: "Sign out",
@@ -94,6 +156,27 @@ const labels: Record<
     account: "Кабинет",
     admin: "Админ",
     cart: "Корзина",
+    home: "Главная",
+    search: "Поиск",
+    accountBalance: "Текущий счет",
+    orders: "Заказы",
+    returns: "Возврат",
+    profile: "Профиль",
+    profileDetails: "Данные профиля",
+    address: "Адрес",
+    phone: "Телефон",
+    noAddress: "Адрес не указан",
+    noPhone: "Телефон не указан",
+    profileLoadError: "Не удалось загрузить данные профиля.",
+    changePassword: "Смена пароля",
+    currentPassword: "Текущий пароль",
+    newPassword: "Новый пароль",
+    repeatPassword: "Повтор пароля",
+    savePassword: "Сохранить",
+    saving: "Сохранение...",
+    passwordMismatch: "Новые пароли не совпадают.",
+    passwordUpdated: "Пароль обновлен.",
+    passwordUpdateError: "Не удалось обновить пароль.",
     language: "Язык",
     authButton: "Вход",
     signOut: "Выход",
@@ -148,14 +231,44 @@ function resolveB4BLoginUrl() {
   return "https://b4b.richstok.com/login";
 }
 
-function formatHeaderCurrencyRate(value: number) {
-  if (!Number.isFinite(value)) {
-    return "—";
+function getInitials(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "U";
   }
-  if (value >= 1) {
-    return value.toFixed(3);
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
   }
-  return value.toFixed(4);
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function normalizeDisplayValue(value: string | null | undefined, fallback: string) {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function buildAddressLine(profile: AccountProfile | null, fallback: string) {
+  if (!profile) {
+    return fallback;
+  }
+  const parts = [profile.addressLine1, profile.addressLine2, profile.city, profile.postalCode, profile.country]
+      .map((item) => item?.trim())
+      .filter((item): item is string => Boolean(item));
+  return parts.length > 0 ? parts.join(", ") : fallback;
+}
+
+function getApiErrorMessage(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+  const response = (error as {response?: {data?: {message?: unknown}}}).response;
+  const message = response?.data?.message;
+  if (typeof message !== "string") {
+    return null;
+  }
+  const normalized = message.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 export default function App() {
@@ -170,13 +283,29 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [profilePanelOpen, setProfilePanelOpen] = useState(false);
+  const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
+  const [accountProfileLoading, setAccountProfileLoading] = useState(false);
+  const [accountProfileError, setAccountProfileError] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [cartToast, setCartToast] = useState<{id: number; text: string} | null>(null);
   const [cartPulseId, setCartPulseId] = useState(0);
+  const [cartItemsCount, setCartItemsCount] = useState(0);
   const toastIdRef = useRef(0);
   const pendingSectionRef = useRef<string | null>(null);
   const preferencesRef = useRef<HTMLDivElement | null>(null);
+  const profilePanelRef = useRef<HTMLDivElement | null>(null);
   const b4bMode = useMemo(() => isB4BHost(), []);
   const b4bLoginUrl = useMemo(() => resolveB4BLoginUrl(), []);
+  const accountSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const accountTabParam = accountSearchParams.get("tab");
+  const accountModeParam = accountSearchParams.get("mode");
   const ui = labels[language];
   const isAdmin = authUser?.role === "ADMIN";
 
@@ -204,6 +333,7 @@ export default function App() {
     if (!b4bMode) {
       setAuthChecked(true);
       setAuthUser(null);
+      setAccountProfile(null);
       return;
     }
     void (async () => {
@@ -217,6 +347,15 @@ export default function App() {
       }
     })();
   }, [b4bMode]);
+
+  useEffect(() => {
+    if (!authUser) {
+      setAccountProfile(null);
+      setAccountProfileError(null);
+      return;
+    }
+    void loadAccountProfile();
+  }, [authUser]);
 
   useEffect(() => {
     void (async () => {
@@ -264,6 +403,7 @@ export default function App() {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPreferencesOpen(false);
+        setProfilePanelOpen(false);
       }
     };
 
@@ -287,6 +427,35 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [cartToast]);
 
+  useEffect(() => {
+    if (!authUser) {
+      setCartItemsCount(0);
+      setProfilePanelOpen(false);
+    }
+  }, [authUser]);
+
+  async function loadAccountProfile() {
+    try {
+      setAccountProfileLoading(true);
+      const data = await fetchAccountProfile();
+      setAccountProfile(data);
+      setAccountProfileError(null);
+    } catch {
+      setAccountProfileError(ui.profileLoadError);
+    } finally {
+      setAccountProfileLoading(false);
+    }
+  }
+
+  async function openProfilePanel() {
+    setProfilePanelOpen(true);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    if (!accountProfile && authUser) {
+      await loadAccountProfile();
+    }
+  }
+
   function openAuth() {
     if (!b4bMode) {
       const from = `${location.pathname}${location.search}${location.hash}`;
@@ -303,8 +472,31 @@ export default function App() {
   async function handleLogout() {
     await logout();
     setAuthUser(null);
+    setProfilePanelOpen(false);
     if (b4bMode) {
       navigate("/login", {replace: true});
+    }
+  }
+
+  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    if (newPassword !== repeatPassword) {
+      setPasswordError(ui.passwordMismatch);
+      return;
+    }
+    try {
+      setPasswordSaving(true);
+      await changePassword({currentPassword, newPassword});
+      setCurrentPassword("");
+      setNewPassword("");
+      setRepeatPassword("");
+      setPasswordSuccess(ui.passwordUpdated);
+    } catch (error) {
+      setPasswordError(getApiErrorMessage(error) ?? ui.passwordUpdateError);
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -324,233 +516,401 @@ export default function App() {
   }
 
   return (
-    <CartProvider authUser={authUser}>
-      <div className="app-shell relative flex min-h-screen flex-col bg-transparent">
-      <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
+      <CartProvider authUser={authUser}>
+        <div className="app-shell relative flex min-h-screen flex-col bg-transparent">
+          <AnimatePresence>{isBooting && <StartupLoader language={language} />}</AnimatePresence>
 
-      <motion.header
-        initial={{y: 0}}
-        animate={{y: 0}}
-        transition={{duration: 0.25, ease: "easeOut"}}
-        className="header-surface sticky top-0 z-[90] overflow-x-clip border-b backdrop-blur-xl"
-      >
-        <div className="mx-auto flex min-w-0 w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <motion.div
-            initial={{opacity: 0, y: -10, scale: 0.98}}
-            animate={{opacity: 1, y: 0, scale: 1}}
-            transition={{duration: 0.5, delay: 0.18}}
-            whileHover={{scale: 1.01}}
-            className="logo-shell relative shrink-0 overflow-hidden rounded-xl border p-1.5"
+          <motion.header
+              initial={{y: 0}}
+              animate={{y: 0}}
+              transition={{duration: 0.25, ease: "easeOut"}}
+              className="header-surface sticky top-0 z-[90] overflow-x-clip border-b backdrop-blur-xl"
           >
-            <RichstokLogo />
-          </motion.div>
+            <div className="mx-auto flex min-w-0 w-full max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+              <motion.div
+                  initial={{opacity: 0, y: -10, scale: 0.98}}
+                  animate={{opacity: 1, y: 0, scale: 1}}
+                  transition={{duration: 0.5, delay: 0.18}}
+                  whileHover={{scale: 1.01}}
+                  className="logo-shell relative shrink-0 overflow-hidden rounded-xl border p-2"
+              >
+                <RichstokLogo className="h-14 sm:h-16 lg:h-[4.5rem]" />
+              </motion.div>
 
-          <div className="flex min-w-0 w-full flex-1 flex-wrap items-center justify-end gap-2 sm:w-auto">
-            {authUser && (
-              <nav className="glass-card flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-brand-500/20 p-1.5">
-                {isAdmin ? (
-                  <NavLink to="/admin" active={location.pathname.startsWith("/admin")}>
-                    <LayoutDashboard className="h-4 w-4" />
-                    {ui.admin}
-                  </NavLink>
-                ) : (
-                  <>
-                    <NavLink to="/" active={location.pathname === "/"}>
-                      <ShoppingBag className="h-4 w-4" />
-                      {ui.store}
-                    </NavLink>
+              <div className="flex min-w-0 w-full flex-1 flex-wrap items-center justify-end gap-2 sm:w-auto">
+                {authUser &&
+                    (isAdmin ? (
+                        <nav className="glass-card flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-brand-500/20 p-1.5">
+                          <NavLink to="/admin" active={location.pathname.startsWith("/admin")}>
+                            <LayoutDashboard className="h-4 w-4" />
+                            {ui.admin}
+                          </NavLink>
+                        </nav>
+                    ) : (
+                        <nav className="user-nav-shell theme-text flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-2xl p-1.5">
+                          <HeaderActionLink to="/" active={location.pathname === "/"}>
+                            <Home className="h-[18px] w-[18px]" />
+                            {ui.home}
+                          </HeaderActionLink>
 
-                    <NavLink to="/account" active={location.pathname.startsWith("/account")}>
-                      <User className="h-4 w-4" />
-                      {ui.account}
-                    </NavLink>
+                          <HeaderActionButton
+                              active={location.pathname === "/"}
+                              onClick={() => goStoreSection("catalog")}
+                          >
+                            <Search className="h-[18px] w-[18px]" />
+                            {ui.search}
+                          </HeaderActionButton>
 
-                    <NavLink to="/cart" active={location.pathname.startsWith("/cart")}>
+                          <HeaderActionLink
+                              to="/account?tab=orders&mode=history"
+                              active={
+                                  location.pathname.startsWith("/account") &&
+                                  (!accountTabParam || accountTabParam === "orders") &&
+                                  (!accountModeParam || accountModeParam === "history")
+                              }
+                          >
+                            <ReceiptText className="h-[18px] w-[18px]" />
+                            {ui.accountBalance}
+                          </HeaderActionLink>
+
+                          <HeaderActionLink to="/cart" active={location.pathname.startsWith("/cart")}>
+                    <span className="relative inline-flex">
                       <motion.span
-                        key={cartPulseId}
-                        initial={{scale: 1, rotate: 0}}
-                        animate={{scale: [1, 1.22, 1], rotate: [0, -8, 8, 0]}}
-                        transition={{duration: 0.55, ease: "easeInOut"}}
-                        className="inline-flex"
+                          key={cartPulseId}
+                          initial={{scale: 1, rotate: 0}}
+                          animate={{scale: [1, 1.22, 1], rotate: [0, -8, 8, 0]}}
+                          transition={{duration: 0.55, ease: "easeInOut"}}
+                          className="inline-flex"
                       >
-                        <ShoppingCart className="h-4 w-4" />
+                        <ShoppingCart className="h-[18px] w-[18px]" />
                       </motion.span>
-                      {ui.cart}
-                    </NavLink>
+                      {cartItemsCount > 0 && (
+                          <span className="absolute -right-2 -top-2 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold leading-5 text-white shadow-md">
+                          {Math.min(cartItemsCount, 99)}
+                        </span>
+                      )}
+                    </span>
+                            {ui.cart}
+                          </HeaderActionLink>
 
-                  </>
-                )}
-              </nav>
-            )}
-            <div className="glass-card flex shrink-0 items-center gap-2 rounded-xl border border-brand-500/20 px-2 py-1">
-              <Coins className="h-4 w-4 text-brand-200" />
-              <label className="sr-only" htmlFor="display-currency-select">
-                {ui.currency}
-              </label>
-              <select
-                id="display-currency-select"
-                value={displayCurrency}
-                onChange={(event) => setDisplayCurrency(resolveDisplayCurrency(event.target.value))}
-                className="bg-transparent text-xs font-medium theme-text outline-none"
-                aria-label={ui.currency}
-              >
-                {DISPLAY_CURRENCIES.map((code) => (
-                  <option key={code} value={code}>
-                    {code} {getCurrencySymbol(code)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div ref={preferencesRef} className="relative z-[130]">
-              <button
-                type="button"
-                aria-label={`${ui.language} & ${ui.themeDark}/${ui.themeLight}`}
-                onClick={() => setPreferencesOpen((prev) => !prev)}
-                className="glass-card inline-flex h-9 w-9 items-center justify-center rounded-xl border border-brand-500/20 transition hover:border-brand-300"
-              >
-                <Settings2 className="h-4 w-4 theme-text" />
-              </button>
-
-              <AnimatePresence>
-                {preferencesOpen && (
-                  <motion.div
-                    initial={{opacity: 0, y: -8, scale: 0.98}}
-                    animate={{opacity: 1, y: 0, scale: 1}}
-                    exit={{opacity: 0, y: -6, scale: 0.98}}
-                    transition={{duration: 0.18}}
-                    className="glass-card absolute right-0 top-[calc(100%+8px)] z-[120] w-52 rounded-xl border border-brand-500/20 p-2"
+                          <HeaderActionLink to="/account?tab=orders&mode=returns" active={location.pathname.startsWith("/account") && (!accountTabParam || accountTabParam === "orders") && accountModeParam === "returns"}>
+                            <RotateCcw className="h-[18px] w-[18px]" />
+                            {ui.returns}
+                          </HeaderActionLink>
+                        </nav>
+                    ))}
+                <div className="user-nav-side-shell flex shrink-0 items-center gap-2 rounded-xl px-2 py-1">
+                  <Coins className="h-4 w-4 text-brand-200" />
+                  <label className="sr-only" htmlFor="display-currency-select">
+                    {ui.currency}
+                  </label>
+                  <select
+                      id="display-currency-select"
+                      value={displayCurrency}
+                      onChange={(event) => setDisplayCurrency(resolveDisplayCurrency(event.target.value))}
+                      className="bg-transparent text-xs font-medium theme-text outline-none"
+                      aria-label={ui.currency}
                   >
-                    <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.language}</p>
-                    <div className="mb-2 flex items-center gap-1 px-1">
-                      {(["az", "en", "ru"] as Language[]).map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => {
-                            setLanguage(item);
-                            setPreferencesOpen(false);
-                          }}
-                          className={`rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide transition ${language === item ? "bg-brand-600 text-white" : "theme-text hover:bg-brand-600/20"}`}
-                          aria-label={`${ui.language}: ${item.toUpperCase()}`}
+                    {DISPLAY_CURRENCIES.map((code) => (
+                        <option key={code} value={code}>
+                          {code} {getCurrencySymbol(code)}
+                        </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div ref={preferencesRef} className="relative z-[130]">
+                  <button
+                      type="button"
+                      aria-label={`${ui.language} & ${ui.themeDark}/${ui.themeLight}`}
+                      onClick={() => setPreferencesOpen((prev) => !prev)}
+                      className="user-nav-side-shell inline-flex h-9 w-9 items-center justify-center rounded-xl transition hover:border-brand-300"
+                  >
+                    <Settings2 className="h-4 w-4 theme-text" />
+                  </button>
+
+                  <AnimatePresence>
+                    {preferencesOpen && (
+                        <motion.div
+                            initial={{opacity: 0, y: -8, scale: 0.98}}
+                            animate={{opacity: 1, y: 0, scale: 1}}
+                            exit={{opacity: 0, y: -6, scale: 0.98}}
+                            transition={{duration: 0.18}}
+                            className="glass-card absolute right-0 top-[calc(100%+8px)] z-[120] w-52 rounded-xl border border-brand-500/20 p-2"
                         >
-                          {item}
-                        </button>
-                      ))}
+                          <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.language}</p>
+                          <div className="mb-2 flex items-center gap-1 px-1">
+                            {(["az", "en", "ru"] as Language[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => {
+                                      setLanguage(item);
+                                      setPreferencesOpen(false);
+                                    }}
+                                    className={`rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide transition ${language === item ? "bg-brand-600 text-white" : "theme-text hover:bg-brand-600/20"}`}
+                                    aria-label={`${ui.language}: ${item.toUpperCase()}`}
+                                >
+                                  {item}
+                                </button>
+                            ))}
+                          </div>
+
+                          <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.themeDark} / {ui.themeLight}</p>
+                          <button
+                              type="button"
+                              onClick={() => {
+                                setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
+                                setPreferencesOpen(false);
+                              }}
+                              className="theme-text flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition hover:bg-brand-600/20"
+                          >
+                            <span>{themeMode === "dark" ? ui.themeDark : ui.themeLight}</span>
+                            {themeMode === "dark" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+                          </button>
+                        </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {!authChecked ? null : authUser ? (
+                    <div className="user-nav-side-shell flex min-w-0 max-w-full items-center gap-2 rounded-xl px-2 py-1.5">
+                      <button
+                          type="button"
+                          onClick={() => void openProfilePanel()}
+                          className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-brand-400/40 bg-black/20 transition hover:border-brand-300"
+                          aria-label={ui.profileDetails}
+                      >
+                        {authUser.avatarUrl ? (
+                            <img src={authUser.avatarUrl} alt={authUser.fullName} className="h-8 w-8 rounded-full object-cover" />
+                        ) : (
+                            <span className="text-[11px] font-semibold text-brand-100">
+                      {getInitials(authUser.fullName)}
+                    </span>
+                        )}
+                      </button>
+                      <div className="min-w-0 text-left sm:hidden">
+                        <p className="theme-heading truncate text-xs font-medium leading-tight">{authUser.fullName}</p>
+                        <p className="theme-muted truncate text-[11px]">
+                          {normalizeDisplayValue(accountProfile?.phone || accountProfile?.phoneAlt, ui.noPhone)}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => void handleLogout()} className="inline-flex items-center gap-1 rounded-md border border-brand-500/35 bg-brand-500/10 px-2.5 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
+                        <LogOut className="h-3.5 w-3.5" />
+                        {ui.signOut}
+                      </button>
+                    </div>
+                ) : b4bMode ? (
+                    <Link
+                        to="/login"
+                        aria-label={ui.authButton}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
+                    >
+                      <LogIn className="h-4 w-4" />
+                    </Link>
+                ) : (
+                    <a
+                        href={b4bLoginUrl}
+                        aria-label={ui.authButton}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
+                    >
+                      <LogIn className="h-4 w-4" />
+                    </a>
+                )}
+              </div>
+            </div>
+          </motion.header>
+
+          <AnimatePresence>
+            {profilePanelOpen && authUser && (
+                <motion.div
+                    initial={{opacity: 0}}
+                    animate={{opacity: 1}}
+                    exit={{opacity: 0}}
+                    className="fixed inset-0 z-[140] bg-black/45 p-4 backdrop-blur-[2px] sm:p-6"
+                    onClick={() => setProfilePanelOpen(false)}
+                >
+                  <motion.section
+                      ref={profilePanelRef}
+                      initial={{opacity: 0, y: 12, scale: 0.98}}
+                      animate={{opacity: 1, y: 0, scale: 1}}
+                      exit={{opacity: 0, y: 8, scale: 0.98}}
+                      transition={{duration: 0.2}}
+                      className="glass-card mx-auto max-w-xl rounded-2xl p-5"
+                      onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-brand-400/40 bg-black/20">
+                          {authUser.avatarUrl ? (
+                              <img src={authUser.avatarUrl} alt={authUser.fullName} className="h-12 w-12 rounded-full object-cover" />
+                          ) : (
+                              <span className="text-sm font-semibold text-brand-100">{getInitials(authUser.fullName)}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="theme-heading truncate text-sm font-semibold">{authUser.fullName}</p>
+                          <p className="theme-muted truncate text-xs">{authUser.email}</p>
+                        </div>
+                      </div>
+                      <button
+                          type="button"
+                          onClick={() => setProfilePanelOpen(false)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 theme-text transition hover:border-brand-400/50"
+                          aria-label="close profile panel"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
 
-                    <p className="theme-muted px-2 py-1 text-[11px] uppercase tracking-[0.14em]">{ui.themeDark} / {ui.themeLight}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
-                        setPreferencesOpen(false);
-                      }}
-                      className="theme-text flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition hover:bg-brand-600/20"
-                    >
-                      <span>{themeMode === "dark" ? ui.themeDark : ui.themeLight}</span>
-                      {themeMode === "dark" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    <div className="mt-4 grid gap-2 rounded-xl border border-white/12 bg-black/15 p-3">
+                      <p className="theme-heading text-sm">{ui.profileDetails}</p>
+                      <p className="theme-text flex items-start gap-2 text-xs">
+                        <Phone className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand-200" />
+                        <span>
+                    {ui.phone}: {normalizeDisplayValue(accountProfile?.phone || accountProfile?.phoneAlt, ui.noPhone)}
+                  </span>
+                      </p>
+                      <p className="theme-text flex items-start gap-2 text-xs">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand-200" />
+                        <span>
+                    {ui.address}: {buildAddressLine(accountProfile, ui.noAddress)}
+                  </span>
+                      </p>
+                      {accountProfileLoading && <p className="theme-muted text-xs">{ui.saving}</p>}
+                      {accountProfileError && <p className="text-xs text-rose-200">{accountProfileError}</p>}
+                    </div>
 
-            {!authChecked ? null : authUser ? (
-                <UserProfile
-                    authUser={authUser}
-                    handleLogout={handleLogout}
-                    ui={{ signOut: ui.signOut }}
-                />
-            ) : b4bMode ? (
-              <Link
-                to="/login"
-                aria-label={ui.authButton}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
-              >
-                <LogIn className="h-4 w-4" />
-              </Link>
-            ) : (
-              <a
-                href={b4bLoginUrl}
-                aria-label={ui.authButton}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 text-white transition hover:opacity-90"
-              >
-                <LogIn className="h-4 w-4" />
-              </a>
+                    <form onSubmit={(event) => void handlePasswordSubmit(event)} className="mt-4 grid gap-2">
+                      <p className="theme-heading text-sm">{ui.changePassword}</p>
+                      <label className="relative block">
+                        <span className="theme-muted mb-1 block text-xs">{ui.currentPassword}</span>
+                        <input
+                            required
+                            minLength={8}
+                            type={showPassword ? "text" : "password"}
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                            className="input-surface w-full rounded-xl border px-3 py-2 pr-10 text-sm outline-none"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            className="absolute right-2 top-[31px] inline-flex h-8 w-8 items-center justify-center rounded-md theme-text"
+                            aria-label="toggle password visibility"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </label>
+                      <label className="block">
+                        <span className="theme-muted mb-1 block text-xs">{ui.newPassword}</span>
+                        <input
+                            required
+                            minLength={8}
+                            type={showPassword ? "text" : "password"}
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
+                            className="input-surface w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="theme-muted mb-1 block text-xs">{ui.repeatPassword}</span>
+                        <input
+                            required
+                            minLength={8}
+                            type={showPassword ? "text" : "password"}
+                            value={repeatPassword}
+                            onChange={(event) => setRepeatPassword(event.target.value)}
+                            className="input-surface w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                        />
+                      </label>
+                      <div className="mt-1 flex justify-end">
+                        <button
+                            type="submit"
+                            disabled={passwordSaving}
+                            className="inline-flex items-center gap-1 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-2 text-xs text-brand-100 transition hover:bg-brand-500/20 disabled:opacity-70"
+                        >
+                          <UserRound className="h-3.5 w-3.5" />
+                          {passwordSaving ? ui.saving : ui.savePassword}
+                        </button>
+                      </div>
+                      {passwordError && <p className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">{passwordError}</p>}
+                      {passwordSuccess && <p className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">{passwordSuccess}</p>}
+                    </form>
+                  </motion.section>
+                </motion.div>
             )}
-          </div>
+          </AnimatePresence>
+
+          <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+            <CartAwareRoutes
+                location={location}
+                locationKey={location.pathname}
+                language={language}
+                displayCurrency={displayCurrency}
+                currencyRates={currencyRates}
+                authUser={authUser}
+                isAdmin={isAdmin}
+                adminOnlyTitle={ui.adminOnlyTitle}
+                adminOnlyBody={ui.adminOnlyBody}
+                authOnlyTitle={ui.authOnlyTitle}
+                authOnlyBody={ui.authOnlyBody}
+                toStore={ui.toStore}
+                onCartAdded={notifyAddedToCart}
+                onCartCountChange={setCartItemsCount}
+                onRequireAuth={openAuth}
+                onAuthenticated={setAuthUser}
+                onLogout={handleLogout}
+                b4bMode={b4bMode}
+                b4bLoginUrl={b4bLoginUrl}
+            />
+          </main>
+
+          <SiteFooter language={language} baseCode={currencyBaseCode} rates={currencyRates} />
+          <AnimatePresence>
+            {cartToast && (
+                <motion.div
+                    key={cartToast.id}
+                    initial={{opacity: 0, y: 28, scale: 0.88, x: 20}}
+                    animate={{opacity: 1, y: 0, scale: 1, x: 0}}
+                    exit={{opacity: 0, y: 12, scale: 0.92, x: 24}}
+                    transition={{type: "spring", stiffness: 300, damping: 24}}
+                    className="fixed bottom-5 right-5 z-[120] w-[min(92vw,340px)] overflow-hidden rounded-xl border border-red-400/45 bg-gradient-to-r from-[#7f1d1d]/95 via-[#991b1b]/95 to-[#b91c1c]/95 px-4 py-3 text-sm text-white shadow-[0_0_30px_rgba(239,68,68,0.45)] backdrop-blur"
+                >
+                  <motion.div
+                      className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-red-300/30"
+                      animate={{scale: [0.9, 1.12, 0.96], opacity: [0.2, 0.5, 0.25]}}
+                      transition={{duration: 1.1, repeat: Infinity, ease: "easeInOut"}}
+                  />
+                  <div className="relative flex items-center gap-2">
+                    <motion.span
+                        initial={{scale: 0.8, rotate: -18}}
+                        animate={{scale: [0.9, 1.1, 1], rotate: [0, 12, 0]}}
+                        transition={{duration: 0.4, ease: "easeOut"}}
+                        className="inline-flex rounded-full bg-white/20 p-1"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-red-100" />
+                    </motion.span>
+                    <span className="font-medium">{cartToast.text}</span>
+                    <motion.span
+                        animate={{scale: [0.95, 1.2, 0.95], opacity: [0.45, 1, 0.45]}}
+                        transition={{duration: 0.9, repeat: Infinity, ease: "easeInOut"}}
+                        className="ml-auto inline-flex"
+                    >
+                      <Sparkles className="h-4 w-4 text-red-100" />
+                    </motion.span>
+                  </div>
+                  <motion.div
+                      initial={{scaleX: 1}}
+                      animate={{scaleX: 0}}
+                      transition={{duration: 1.65, ease: "linear"}}
+                      className="mt-2 h-1 origin-left rounded-full bg-white/50"
+                  />
+                </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </motion.header>
-
-      <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
-        <CartAwareRoutes
-          location={location}
-          locationKey={location.pathname}
-          language={language}
-          displayCurrency={displayCurrency}
-          currencyRates={currencyRates}
-          authUser={authUser}
-          isAdmin={isAdmin}
-          adminOnlyTitle={ui.adminOnlyTitle}
-          adminOnlyBody={ui.adminOnlyBody}
-          authOnlyTitle={ui.authOnlyTitle}
-          authOnlyBody={ui.authOnlyBody}
-          toStore={ui.toStore}
-          onCartAdded={notifyAddedToCart}
-          onRequireAuth={openAuth}
-          onAuthenticated={setAuthUser}
-          onLogout={handleLogout}
-          b4bMode={b4bMode}
-          b4bLoginUrl={b4bLoginUrl}
-        />
-      </main>
-
-      <SiteFooter language={language} baseCode={currencyBaseCode} rates={currencyRates} />
-      <AnimatePresence>
-        {cartToast && (
-          <motion.div
-            key={cartToast.id}
-            initial={{opacity: 0, y: 28, scale: 0.88, x: 20}}
-            animate={{opacity: 1, y: 0, scale: 1, x: 0}}
-            exit={{opacity: 0, y: 12, scale: 0.92, x: 24}}
-            transition={{type: "spring", stiffness: 300, damping: 24}}
-            className="fixed bottom-5 right-5 z-[120] w-[min(92vw,340px)] overflow-hidden rounded-xl border border-red-400/45 bg-gradient-to-r from-[#7f1d1d]/95 via-[#991b1b]/95 to-[#b91c1c]/95 px-4 py-3 text-sm text-white shadow-[0_0_30px_rgba(239,68,68,0.45)] backdrop-blur"
-          >
-            <motion.div
-              className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-red-300/30"
-              animate={{scale: [0.9, 1.12, 0.96], opacity: [0.2, 0.5, 0.25]}}
-              transition={{duration: 1.1, repeat: Infinity, ease: "easeInOut"}}
-            />
-            <div className="relative flex items-center gap-2">
-              <motion.span
-                initial={{scale: 0.8, rotate: -18}}
-                animate={{scale: [0.9, 1.1, 1], rotate: [0, 12, 0]}}
-                transition={{duration: 0.4, ease: "easeOut"}}
-                className="inline-flex rounded-full bg-white/20 p-1"
-              >
-                <CheckCircle2 className="h-4 w-4 text-red-100" />
-              </motion.span>
-              <span className="font-medium">{cartToast.text}</span>
-              <motion.span
-                animate={{scale: [0.95, 1.2, 0.95], opacity: [0.45, 1, 0.45]}}
-                transition={{duration: 0.9, repeat: Infinity, ease: "easeInOut"}}
-                className="ml-auto inline-flex"
-              >
-                <Sparkles className="h-4 w-4 text-red-100" />
-              </motion.span>
-            </div>
-            <motion.div
-              initial={{scaleX: 1}}
-              animate={{scaleX: 0}}
-              transition={{duration: 1.65, ease: "linear"}}
-              className="mt-2 h-1 origin-left rounded-full bg-white/50"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      </div>
-    </CartProvider>
+      </CartProvider>
   );
 }
 
@@ -561,25 +921,61 @@ type NavLinkProps = {
 };
 
 function NavLink({to, active, children}: NavLinkProps) {
-    return (
-        <Link
-            to={to}
-            className={`relative shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
-                active ? "text-white" : "theme-text"
-            }`}
-        >
-            {active && (
-                <motion.span
-                    layoutId="activeNav"
-                    className="absolute inset-0 rounded-lg bg-red-500"
-                    transition={{type: "spring", stiffness: 380, damping: 30}}
-                />
-            )}
+  return (
+      <Link
+          to={to}
+          className={`relative shrink-0 rounded-lg border px-2.5 py-2 text-xs font-medium sm:px-4 sm:text-sm ${
+              active
+                  ? "border-red-500 bg-red-600 text-white"
+                  : "border-transparent theme-text hover:border-red-400/40 hover:bg-red-500/10"
+          }`}
+      >
             <span className="relative z-10 flex items-center gap-2">
         {children}
       </span>
-        </Link>
-    );
+      </Link>
+  );
+}
+
+type HeaderActionProps = {
+  active: boolean;
+  children: ReactNode;
+};
+
+type HeaderActionLinkProps = HeaderActionProps & {
+  to: string;
+};
+
+function HeaderActionLink({to, active, children}: HeaderActionLinkProps) {
+  return (
+      <Link to={to} className={getHeaderActionClassName(active)}>
+      <span className="relative z-10 flex items-center gap-2">
+        {children}
+      </span>
+      </Link>
+  );
+}
+
+type HeaderActionButtonProps = HeaderActionProps & {
+  onClick: () => void;
+};
+
+function HeaderActionButton({onClick, active, children}: HeaderActionButtonProps) {
+  return (
+      <button type="button" onClick={onClick} className={getHeaderActionClassName(active)}>
+      <span className="relative z-10 flex items-center gap-2">
+        {children}
+      </span>
+      </button>
+  );
+}
+
+function getHeaderActionClassName(active: boolean) {
+  return `user-nav-action theme-text relative flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium sm:px-4 sm:text-[15px] ${
+      active
+          ? "is-active border-red-500 bg-red-600 text-white"
+          : "border-transparent hover:border-red-400/40 hover:bg-red-500/10"
+  }`;
 }
 
 type GuardCardProps = {
@@ -590,13 +986,13 @@ type GuardCardProps = {
 
 function GuardCard({title, description, buttonText}: GuardCardProps) {
   return (
-    <section className="glass-card mx-auto max-w-xl rounded-2xl p-7 text-center">
-      <h2 className="theme-heading text-2xl font-semibold">{title}</h2>
-      <p className="theme-text mt-2 text-sm">{description}</p>
-      <Link to="/" className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 px-4 py-2 text-sm font-medium text-white">
-        {buttonText}
-      </Link>
-    </section>
+      <section className="glass-card mx-auto max-w-xl rounded-2xl p-7 text-center">
+        <h2 className="theme-heading text-2xl font-semibold">{title}</h2>
+        <p className="theme-text mt-2 text-sm">{description}</p>
+        <Link to="/" className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-brand-600 to-pulse-500 px-4 py-2 text-sm font-medium text-white">
+          {buttonText}
+        </Link>
+      </section>
   );
 }
 
@@ -614,6 +1010,7 @@ type CartAwareRoutesProps = {
   authOnlyBody: string;
   toStore: string;
   onCartAdded: () => void;
+  onCartCountChange: (count: number) => void;
   onRequireAuth: () => void;
   onAuthenticated: (user: AuthUser) => void;
   onLogout: () => Promise<void>;
@@ -622,26 +1019,31 @@ type CartAwareRoutesProps = {
 };
 
 function CartAwareRoutes({
-  location,
-  locationKey,
-  language,
-  displayCurrency,
-  currencyRates,
-  authUser,
-  isAdmin,
-  adminOnlyTitle,
-  adminOnlyBody,
-  authOnlyTitle,
-  authOnlyBody,
-  toStore,
-  onCartAdded,
-  onRequireAuth,
-  onAuthenticated,
-  onLogout,
-  b4bMode,
-  b4bLoginUrl
-}: CartAwareRoutesProps) {
-  const {addToCart} = useCart();
+                           location,
+                           locationKey,
+                           language,
+                           displayCurrency,
+                           currencyRates,
+                           authUser,
+                           isAdmin,
+                           adminOnlyTitle,
+                           adminOnlyBody,
+                           authOnlyTitle,
+                           authOnlyBody,
+                           toStore,
+                           onCartAdded,
+                           onCartCountChange,
+                           onRequireAuth,
+                           onAuthenticated,
+                           onLogout,
+                           b4bMode,
+                           b4bLoginUrl
+                         }: CartAwareRoutesProps) {
+  const {addToCart, totalItems} = useCart();
+
+  useEffect(() => {
+    onCartCountChange(totalItems);
+  }, [totalItems, onCartCountChange]);
 
   async function handleAddToCart(product: Product) {
     if (!authUser) {
@@ -653,111 +1055,111 @@ function CartAwareRoutes({
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={locationKey}>
-        <Route
-          path="/b4b-access"
-          element={<PublicGatewayPage language={language} b4bLoginUrl={b4bLoginUrl} />}
-        />
-        <Route
-          path="/login"
-          element={
-            b4bMode ? (
-              authUser ? (
-                <Navigate to="/" replace />
-              ) : (
-                <LoginPage
-                  language={language}
-                  authUser={authUser}
-                  onAuthenticated={onAuthenticated}
-                  onLogout={onLogout}
-                />
-              )
-            ) : (
-              <Navigate to="/b4b-access" replace />
-            )
-          }
-        />
-        <Route
-          path="/"
-          element={
-            b4bMode && !authUser ? (
-              <Navigate to="/login" replace state={{from: "/"}} />
-            ) : authUser && isAdmin ? (
-              <Navigate to="/admin" replace />
-            ) : (
-              <StorePage
-                language={language}
-                displayCurrency={displayCurrency}
-                currencyRates={currencyRates}
-                onAddToCart={(product) => void handleAddToCart(product)}
-              />
-            )
-          }
-        />
-        <Route
-          path="/products/:id"
-          element={
-            b4bMode && !authUser ? (
-              <Navigate to="/login" replace state={{from: location.pathname}} />
-            ) : authUser && isAdmin ? (
-              <Navigate to="/admin" replace />
-            ) : (
-              <ProductDetailsPage
-                language={language}
-                displayCurrency={displayCurrency}
-                currencyRates={currencyRates}
-                onAddToCart={(product) => void handleAddToCart(product)}
-              />
-            )
-          }
-        />
-        <Route
-          path="/cart"
-          element={
-            authUser && isAdmin ? (
-              <Navigate to="/admin" replace />
-            ) : authUser ? (
-              <CartPage
-                language={language}
-                displayCurrency={displayCurrency}
-                currencyRates={currencyRates}
-                authUser={authUser}
-              />
-            ) : b4bMode ? (
-              <Navigate to="/login" replace state={{from: location.pathname}} />
-            ) : (
-              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
-            )
-          }
-        />
-        <Route
-          path="/account"
-          element={
-            authUser && isAdmin ? (
-              <Navigate to="/admin" replace />
-            ) : authUser ? (
-              <AccountPage language={language} user={authUser} />
-            ) : b4bMode ? (
-              <Navigate to="/login" replace state={{from: location.pathname}} />
-            ) : (
-              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
-            )
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            authUser && isAdmin ? (
-              <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
-            ) : b4bMode ? (
-              <Navigate to="/login" replace state={{from: location.pathname}} />
-            ) : (
-              <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
-            )
-          }
-        />
-      </Routes>
-    </AnimatePresence>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={locationKey}>
+          <Route
+              path="/b4b-access"
+              element={<PublicGatewayPage language={language} b4bLoginUrl={b4bLoginUrl} />}
+          />
+          <Route
+              path="/login"
+              element={
+                b4bMode ? (
+                    authUser ? (
+                        <Navigate to="/" replace />
+                    ) : (
+                        <LoginPage
+                            language={language}
+                            authUser={authUser}
+                            onAuthenticated={onAuthenticated}
+                            onLogout={onLogout}
+                        />
+                    )
+                ) : (
+                    <Navigate to="/b4b-access" replace />
+                )
+              }
+          />
+          <Route
+              path="/"
+              element={
+                b4bMode && !authUser ? (
+                    <Navigate to="/login" replace state={{from: "/"}} />
+                ) : authUser && isAdmin ? (
+                    <Navigate to="/admin" replace />
+                ) : (
+                    <StorePage
+                        language={language}
+                        displayCurrency={displayCurrency}
+                        currencyRates={currencyRates}
+                        onAddToCart={(product) => void handleAddToCart(product)}
+                    />
+                )
+              }
+          />
+          <Route
+              path="/products/:id"
+              element={
+                b4bMode && !authUser ? (
+                    <Navigate to="/login" replace state={{from: location.pathname}} />
+                ) : authUser && isAdmin ? (
+                    <Navigate to="/admin" replace />
+                ) : (
+                    <ProductDetailsPage
+                        language={language}
+                        displayCurrency={displayCurrency}
+                        currencyRates={currencyRates}
+                        onAddToCart={(product) => void handleAddToCart(product)}
+                    />
+                )
+              }
+          />
+          <Route
+              path="/cart"
+              element={
+                authUser && isAdmin ? (
+                    <Navigate to="/admin" replace />
+                ) : authUser ? (
+                    <CartPage
+                        language={language}
+                        displayCurrency={displayCurrency}
+                        currencyRates={currencyRates}
+                        authUser={authUser}
+                    />
+                ) : b4bMode ? (
+                    <Navigate to="/login" replace state={{from: location.pathname}} />
+                ) : (
+                    <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
+                )
+              }
+          />
+          <Route
+              path="/account"
+              element={
+                authUser && isAdmin ? (
+                    <Navigate to="/admin" replace />
+                ) : authUser ? (
+                    <AccountPage language={language} user={authUser} />
+                ) : b4bMode ? (
+                    <Navigate to="/login" replace state={{from: location.pathname}} />
+                ) : (
+                    <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
+                )
+              }
+          />
+          <Route
+              path="/admin"
+              element={
+                authUser && isAdmin ? (
+                    <AdminPage language={language} displayCurrency={displayCurrency} currencyRates={currencyRates} />
+                ) : b4bMode ? (
+                    <Navigate to="/login" replace state={{from: location.pathname}} />
+                ) : (
+                    <Navigate to="/b4b-access" replace state={{from: location.pathname}} />
+                )
+              }
+          />
+        </Routes>
+      </AnimatePresence>
   );
 }

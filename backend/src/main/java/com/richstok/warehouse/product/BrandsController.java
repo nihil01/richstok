@@ -25,6 +25,20 @@ public class BrandsController {
             return stream
                     .filter(Files::isRegularFile)
                     .map(file -> "/brands/" + file.getFileName().toString())
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @GetMapping("/hero_slides")
+    public List<String> getHeroSlides() {
+        try (var stream = Files.list(Paths.get(appProperties.hero().images()))) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(file -> "/assets/hero/" + file.getFileName().toString())
+                    .sorted()
                     .toList();
         } catch (IOException e) {
             throw new RuntimeException(e);

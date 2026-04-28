@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record AdminOrderStatusUpdateRequest(
         @NotNull OrderStatus status,
+        Boolean recordAsDebt,
         String note
 ) {
 }

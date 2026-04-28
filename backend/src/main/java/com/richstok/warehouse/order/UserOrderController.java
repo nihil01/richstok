@@ -30,10 +30,11 @@ public class UserOrderController {
             @AuthenticationPrincipal AppUserPrincipal principal,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "query", required = false) String query
+            @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "scope", required = false) String scope
     ) {
         AppUser user = requireUser(principal);
-        return userOrderService.getMyOrders(user.getId(), page, size, query);
+        return userOrderService.getMyOrders(user.getId(), page, size, query, scope);
     }
 
     @GetMapping("/{id}")

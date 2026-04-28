@@ -31,21 +31,21 @@ public class AdminOrderController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
             @RequestParam(value = "query", required = false) String query,
-            @RequestParam(value = "status", required = false) OrderStatus status,
+            @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(value = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
     ) {
-        return adminOrderReportService.getOrders(page, size, query, status, fromDate, toDate);
+        return adminOrderReportService.getOrders(page, size, query, resolveOrderStatus(status), fromDate, toDate);
     }
 
     @GetMapping("/summary")
     public AdminOrderSummaryResponse getSummary(
             @RequestParam(value = "query", required = false) String query,
-            @RequestParam(value = "status", required = false) OrderStatus status,
+            @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(value = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
     ) {
-        return adminOrderReportService.getSummary(query, status, fromDate, toDate);
+        return adminOrderReportService.getSummary(query, resolveOrderStatus(status), fromDate, toDate);
     }
 
     @GetMapping("/{id}")
@@ -58,7 +58,14 @@ public class AdminOrderController {
             @PathVariable Long id,
             @Valid @RequestBody AdminOrderStatusUpdateRequest request
     ) {
-        adminOrderWorkflowService.updateOrderStatus(id, request.status(), request.note());
+        adminOrderWorkflowService.updateOrderStatus(id, request.status(), request.recordAsDebt(), request.note());
         return adminOrderReportService.getOrderDetails(id);
+    }
+
+    private OrderStatus resolveOrderStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            return null;
+        }
+        return OrderStatus.fromExternal(rawStatus);
     }
 }

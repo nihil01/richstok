@@ -26,6 +26,7 @@ const cardCopy: Record<
     outOfStockAction: string;
     clarifyAction: string;
     stockUnknownHint: string;
+    discountBadge: string;
   }
 > = {
   az: {
@@ -35,7 +36,8 @@ const cardCopy: Record<
     addToCart: "Səbətə at",
     outOfStockAction: "Yoxdur",
     clarifyAction: "Dəqiqləşdir",
-    stockUnknownHint: "Dəqiq say məlum deyil. Dəqiq stok üçün dəstək xidməti ilə əlaqə saxla."
+    stockUnknownHint: "Dəqiq say məlum deyil. Dəqiq stok üçün dəstək xidməti ilə əlaqə saxla.",
+    discountBadge: "Endirim"
   },
   en: {
     defaultDescription: "Premium component for stable and safe vehicle performance.",
@@ -44,7 +46,8 @@ const cardCopy: Record<
     addToCart: "Add to cart",
     outOfStockAction: "Out of stock",
     clarifyAction: "Clarify",
-    stockUnknownHint: "Exact quantity is unknown. Please contact support to confirm stock."
+    stockUnknownHint: "Exact quantity is unknown. Please contact support to confirm stock.",
+    discountBadge: "Discount"
   },
   ru: {
     defaultDescription: "Премиальная деталь для стабильной и безопасной работы авто.",
@@ -53,13 +56,17 @@ const cardCopy: Record<
     addToCart: "В корзину",
     outOfStockAction: "Нет в наличии",
     clarifyAction: "Уточнить",
-    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки."
+    stockUnknownHint: "Точное количество неизвестно. Уточните наличие в службе поддержки.",
+    discountBadge: "Скидка"
   }
 };
 
 export default function ProductCard({product, index = 0, language, displayCurrency, currencyRates, onOpen, onAddToCart}: ProductCardProps) {
   const stockProgress = Math.min(100, Math.round((product.stockQuantity / 120) * 100));
   const copy = cardCopy[language];
+  const hasDiscount = Boolean(product.hasDiscount) || (product.discountPercent ?? 0) > 0;
+  const discountPercent = Math.max(0, Math.min(100, product.discountPercent ?? 0));
+  const effectivePrice = hasDiscount ? (product.discountedPrice ?? product.price) : product.price;
   const [addedPulse, setAddedPulse] = useState(false);
   const hasUnknownStock = product.unknownCount;
   const outOfStock = product.stockQuantity <= 0;
@@ -93,9 +100,21 @@ export default function ProductCard({product, index = 0, language, displayCurren
         </div>
         <div className="relative mb-4 flex items-center justify-between gap-2">
           <h3 className="theme-heading line-clamp-1 text-xl font-semibold">{product.name}</h3>
-          <span className="rounded-md border border-brand-400/30 bg-brand-500/12 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-brand-100">
-            {product.brand || "OEM"}
-          </span>
+          <div className="flex items-center gap-2">
+            {hasDiscount && (
+              <motion.span
+                initial={{scale: 0.9, opacity: 0}}
+                animate={{scale: 1, opacity: 1}}
+                transition={{duration: 0.25}}
+                className="rounded-md border border-rose-400/40 bg-rose-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-100"
+              >
+                {copy.discountBadge} -{discountPercent}%
+              </motion.span>
+            )}
+            <span className="rounded-md border border-brand-400/30 bg-brand-500/12 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-brand-100">
+              {product.brand || "OEM"}
+            </span>
+          </div>
         </div>
 
         <p className="theme-text min-h-12 text-sm">{product.description || copy.defaultDescription}</p>
@@ -138,9 +157,16 @@ export default function ProductCard({product, index = 0, language, displayCurren
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-3">
-          <strong className="text-2xl font-semibold text-brand-200">
-            {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}
-          </strong>
+          <div className="flex flex-col">
+            {hasDiscount && (
+              <span className="theme-muted text-xs line-through">
+                {formatConvertedPrice(product.price, displayCurrency, currencyRates, language)}
+              </span>
+            )}
+            <strong className="text-2xl font-semibold text-brand-200">
+              {formatConvertedPrice(effectivePrice, displayCurrency, currencyRates, language)}
+            </strong>
+          </div>
           <motion.button
             animate={!addDisabled && addedPulse
               ? {

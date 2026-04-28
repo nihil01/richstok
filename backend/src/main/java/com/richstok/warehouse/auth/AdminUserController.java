@@ -2,6 +2,7 @@ package com.richstok.warehouse.auth;
 
 import com.richstok.warehouse.auth.dto.AdminUserActiveRequest;
 import com.richstok.warehouse.auth.dto.AdminUserCreateRequest;
+import com.richstok.warehouse.auth.dto.AdminUserDebtLimitRequest;
 import com.richstok.warehouse.auth.dto.AdminUserResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,16 @@ public class AdminUserController {
     @PatchMapping("/{id}/active")
     public AdminUserResponse setActive(@PathVariable Long id, @Valid @RequestBody AdminUserActiveRequest request) {
         return adminUserService.setUserActive(id, Boolean.TRUE.equals(request.active()));
+    }
+
+    @PatchMapping("/{id}/debt-limit")
+    public AdminUserResponse setDebtLimit(@PathVariable Long id, @Valid @RequestBody AdminUserDebtLimitRequest request) {
+        return adminUserService.setUserDebtLimit(id, request.debtLimit());
+    }
+
+    @PatchMapping("/{id}/debt-limit/reset")
+    public AdminUserResponse resetDebtLimit(@PathVariable Long id) {
+        return adminUserService.resetUserDebtLimit(id);
     }
 
     @DeleteMapping("/{id}")

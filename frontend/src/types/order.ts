@@ -1,9 +1,11 @@
 import type {PageResponse} from "@/types/product";
 
-export type OrderStatus = "PENDING" | "PROCESSING" | "SHIPPED" | "COMPLETED" | "PARTIALLY_RETURNED" | "CANCELLED" | "RETURNED";
+export type OrderStatus = "PENDING" | "COMPLETED" | "PARTIALLY_RETURNED" | "CANCELLED" | "RETURNED";
 export type OrderStatusFilter = OrderStatus | "ALL";
+export type UserOrderScope = "ALL" | "PENDING" | "HISTORY" | "RETURNS";
 export type AdminOrderStatusUpdatePayload = {
   status: OrderStatus;
+  recordAsDebt?: boolean;
   note?: string;
 };
 
@@ -20,6 +22,7 @@ export type AdminOrderListItem = {
   totalAmount: number;
   itemCount: number;
   currencyCode: string;
+  recordedAsDebt: boolean;
   status: OrderStatus;
   createdAt: string;
 };
@@ -39,6 +42,7 @@ export type AdminOrderItem = {
   lineTotal: number;
   imageUrl: string | null;
   stockState: string | null;
+  customerNote: string | null;
   returnReason: string | null;
 };
 
@@ -59,6 +63,7 @@ export type AdminOrderDetails = {
   totalAmount: number;
   itemCount: number;
   currencyCode: string;
+  recordedAsDebt: boolean;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;
@@ -96,6 +101,7 @@ export type UserOrderItem = {
   unitPrice: number;
   lineTotal: number;
   imageUrl: string | null;
+  customerNote: string | null;
   returnReason: string | null;
 };
 

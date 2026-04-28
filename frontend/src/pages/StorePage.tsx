@@ -1,8 +1,10 @@
 import {
   fetchBrandImages,
+  fetchCatalogProducts,
   fetchCatalogCategories,
   fetchCatalogStats,
   fetchCatalogProductsPage,
+  fetchHeroSlides,
   searchCatalogProducts
 } from "@/api/client";
 import ProductCard from "@/components/ProductCard";
@@ -31,7 +33,7 @@ import {
 } from "lucide-react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import {useNavigate} from "react-router-dom";
-import {Autoplay, FreeMode, Pagination} from "swiper/modules";
+import {Autoplay, FreeMode} from "swiper/modules";
 import {Swiper, SwiperSlide} from "swiper/react";
 import "swiper/css";
 import "swiper/css/free-mode";
@@ -113,6 +115,9 @@ const storeCopy: Record<
     promoTag: string;
     promoTitle: string;
     promoSubtitle: string;
+    promoEmpty: string;
+    promoOpenProduct: string;
+    heroCta: string;
     promoSlides: Array<{title: string; description: string; action: string}>;
     highlights: Array<{title: string; caption: string}>;
     hitsTag: string;
@@ -148,6 +153,9 @@ const storeCopy: Record<
     promoTag: "Real promo",
     promoTitle: "Həftənin aktiv kampaniyaları",
     promoSubtitle: "Məhdud stoklu real təkliflər — qiymətlər anlıq yenilənir.",
+    promoEmpty: "Hazırda aktiv endirimli məhsul yoxdur.",
+    promoOpenProduct: "Məhsula bax",
+    heroCta: "Kataloqa keç",
     promoSlides: [
       {
         title: "Liqui Moly Top Tec 4200 5W-30 — 15% endirim",
@@ -176,7 +184,7 @@ const storeCopy: Record<
     allProducts: "Bütün məhsullar",
     loading: "Kataloq yüklənir...",
     error: "Kataloq yüklənmədi. Demo məhsullar göstərilir.",
-    brandsTitle: "Stokda olan markalar",
+    brandsTitle: "Stokda olan brendlər",
     brandsDescription: "Orijinal və sınanmış avtomobil hissəsi istehsalçıları.",
     orderSteps: [
       {title: "Məhsul seçimi", description: "Ad, OEM, brand code, model və ya kateqoriya ilə tap."},
@@ -207,6 +215,9 @@ const storeCopy: Record<
     promoTag: "Real promo",
     promoTitle: "Live weekly deals",
     promoSubtitle: "Limited-stock offers with real pricing from the catalog.",
+    promoEmpty: "There are no active discounted products right now.",
+    promoOpenProduct: "View product",
+    heroCta: "Open catalog",
     promoSlides: [
       {
         title: "Liqui Moly Top Tec 4200 5W-30 — 15% off",
@@ -235,7 +246,7 @@ const storeCopy: Record<
     allProducts: "All products",
     loading: "Loading catalog...",
     error: "Catalog failed to load. Demo products are shown.",
-    brandsTitle: "Companies in stock",
+    brandsTitle: "Brands in stock",
     brandsDescription: "Genuine and proven auto parts manufacturers.",
     orderSteps: [
       {title: "Select product", description: "Find by name, model, OEM, or category."},
@@ -266,6 +277,9 @@ const storeCopy: Record<
     promoTag: "Реальное промо",
     promoTitle: "Актуальные акции недели",
     promoSubtitle: "Реальные предложения с ограниченным остатком и живой ценой.",
+    promoEmpty: "Сейчас нет активных товаров со скидкой.",
+    promoOpenProduct: "Открыть товар",
+    heroCta: "Перейти в каталог",
     promoSlides: [
       {
         title: "Liqui Moly Top Tec 4200 5W-30 — скидка 15%",
@@ -294,7 +308,7 @@ const storeCopy: Record<
     allProducts: "Все товары",
     loading: "Загрузка каталога...",
     error: "Не удалось загрузить каталог. Показаны демонстрационные товары.",
-    brandsTitle: "Марки в наличии",
+    brandsTitle: "Бренды в наличии",
     brandsDescription: "Оригинальные и проверенные производители автозапчастей.",
     orderSteps: [
       {title: "Подбор товара", description: "Ищи по названию, OEM, brand code, модели или категории."},
@@ -323,6 +337,8 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogStats, setCatalogStats] = useState<ProductCatalogStats | null>(null);
   const [brandImages, setBrandImages] = useState<string[]>([]);
+  const [heroSlides, setHeroSlides] = useState<string[]>([]);
+  const [discountedProducts, setDiscountedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategorySummary[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -354,6 +370,8 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
   }, [selectedCategory, catalogQuery]);
 
   useEffect(() => {
+    void loadHeroSlides();
+    void loadDiscountedProducts();
     void loadBrandImages();
     void loadCategories();
     void loadCatalogStats();
@@ -500,6 +518,27 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
     }
   }
 
+  async function loadHeroSlides() {
+    try {
+      const data = await fetchHeroSlides();
+      setHeroSlides(data);
+    } catch {
+      setHeroSlides([]);
+    }
+  }
+
+  async function loadDiscountedProducts() {
+    try {
+      const data = await fetchCatalogProducts();
+      const items = (Array.isArray(data) ? data : [])
+        .filter((item) => Boolean(item.hasDiscount) || (item.discountPercent ?? 0) > 0)
+        .slice(0, 24);
+      setDiscountedProducts(items);
+    } catch {
+      setDiscountedProducts([]);
+    }
+  }
+
   async function loadCatalogStats() {
     try {
       const data = await fetchCatalogStats();
@@ -537,6 +576,10 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
   }, [products, hasError]);
 
   const mirroredBrandImages = useMemo(() => [...brandImages].reverse(), [brandImages]);
+  const promoProducts = useMemo(
+    () => discountedProducts.filter((item) => item.active !== false),
+    [discountedProducts]
+  );
   const allProductsCount = useMemo(() => {
     if (catalogStats) {
       return Math.max(0, catalogStats.totalProducts);
@@ -574,250 +617,151 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
       transition={{duration: 0.35}}
       className="space-y-8 pb-10"
     >
-
-      <section id="catalog" className="relative z-20 scroll-mt-28">
-        <motion.article
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className="glass-card rounded-2xl border border-brand-500/22 p-6 sm:p-8 lg:p-10"
+      <section id="hero-main" className="relative z-20 scroll-mt-28">
+        <motion.div
+          initial={{opacity: 0, y: 16}}
+          animate={{opacity: 1, y: 0}}
+          transition={{duration: 0.45}}
+          className="glass-card overflow-hidden rounded-2xl border border-brand-500/25 p-0"
         >
-        <span className="inline-flex items-center rounded-md border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[18px] uppercase tracking-[0.20em] text-brand-200">
-          {copy.badge}
-        </span>
-
-          <p className="theme-text mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
-            {copy.description}
-          </p>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-[1fr,auto]">
-            <motion.div
-                ref={searchContainerRef}
-                className="group relative z-50 block rounded-[22px]"
-                initial={{ opacity: 0, y: 24, scale: 0.965, rotateX: 8 }}
-                animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -2, scale: 1.005 }}
-            >
-              <motion.div
-                  className="pointer-events-none absolute -inset-[1px] rounded-[24px] bg-gradient-to-r from-brand-500/20 via-white/10 to-brand-400/20 blur-xl"
-                  animate={{
-                    opacity: [0.35, 0.7, 0.35],
-                    scale: [1, 1.015, 1],
-                  }}
-                  transition={{
-                    duration: 3.2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-              />
-
-              <motion.div
-                  className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-r from-transparent via-white/10 to-transparent"
-                  initial={{ x: "-130%", opacity: 0 }}
-                  animate={
-                    searchSpotlight
-                        ? { x: ["-130%", "130%"], opacity: [0, 0.9, 0] }
-                        : { x: "-130%", opacity: 0 }
-                  }
-                  transition={{
-                    duration: 1.35,
-                    ease: "easeInOut",
-                  }}
-              />
-
-              {searchSpotlight && (
-                  <>
-                    <motion.span
-                        className="pointer-events-none absolute -inset-1 rounded-[24px] border border-brand-400/50"
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{
-                          opacity: [0, 0.8, 0],
-                          scale: [0.96, 1.02, 1.045],
-                        }}
-                        transition={{ duration: 1.5, ease: "easeOut" }}
-                    />
-                  </>
-              )}
-
-              <div className="relative overflow-hidden rounded-[22px]">
-                <motion.div
-                    className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-brand-500/10 via-brand-400/5 to-transparent"
-                    animate={{
-                      opacity: [0.5, 0.85, 0.5],
-                    }}
-                    transition={{
-                      duration: 2.4,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }}
-                />
-
-                <motion.div
-                    initial={{ opacity: 0, x: -10, scale: 0.85 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    transition={{ delay: 0.18, duration: 0.45, ease: "easeOut" }}
-                    className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2"
-                >
-                  <motion.div
-                      animate={{
-                        rotate: [0, -10, 10, 0],
-                        scale: [1, 1.12, 1],
-                      }}
-                      transition={{
-                        duration: 1.8,
-                        repeat: Infinity,
-                        repeatDelay: 4,
-                        ease: "easeInOut",
-                      }}
-                  >
-                    <Search className="theme-muted h-[16px] w-[16px]" />
-                  </motion.div>
-                </motion.div>
-
-                {!searchQuery && (
-                    <div className="pointer-events-none absolute inset-y-0 left-11 right-4 z-[2] flex items-center">
-                    <span className="theme-muted truncate text-sm">
-                      {typedPlaceholder}
-                      <motion.span
-                          className="ml-0.5 inline-block h-[1em] w-[1px] bg-current align-middle"
-                          animate={{ opacity: [1, 0, 1] }}
-                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
-                      />
+          <Swiper
+            modules={[Autoplay]}
+            className="hero-main-swiper"
+            slidesPerView={1}
+            spaceBetween={0}
+            loop={heroSlides.length > 1}
+            autoplay={{delay: 3800, disableOnInteraction: false, pauseOnMouseEnter: true}}
+          >
+            {(heroSlides.length > 0 ? heroSlides : [null]).map((imageUrl, index) => (
+              <SwiperSlide key={imageUrl ?? `hero-fallback-${index}`}>
+                <article className="relative min-h-[21rem] overflow-hidden sm:min-h-[26rem] lg:min-h-[30rem]">
+                  {imageUrl ? (
+                    <img src={imageUrl} alt={`hero-slide-${index + 1}`} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-r from-brand-700/35 via-brand-600/20 to-black/20" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/25 dark:from-black/75 dark:via-black/55 dark:to-black/30" />
+                  <div className="relative z-10 flex h-full max-w-2xl flex-col justify-end gap-3 p-6 sm:p-8 lg:p-10">
+                    <span className="inline-flex w-fit items-center rounded-md border border-white/35 bg-black/30 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white">
+                      {copy.badge}
                     </span>
-                    </div>
-                )}
-
-                <motion.input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onFocus={() => {
-                      if (searchResults.length > 0 || searchLoading) {
-                        setSearchDropdownOpen(true);
-                      }
-                    }}
-                    placeholder=""
-                    initial={{
-                      boxShadow: "0 0 0 rgba(0,0,0,0)",
-                      backgroundPosition: "0% 50%",
-                    }}
-                    animate={
-                      searchSpotlight
-                          ? {
-                            boxShadow: [
-                              "0 0 0 rgba(0,0,0,0)",
-                              "0 0 0 3px rgba(99,102,241,0.14)",
-                              "0 0 22px rgba(59,130,246,0.18)",
-                              "0 0 0 rgba(0,0,0,0)",
-                            ],
-                          }
-                          : {
-                            boxShadow: "0 0 0 rgba(0,0,0,0)",
-                          }
-                    }
-                    transition={{
-                      duration: searchSpotlight ? 1.25 : 0.25,
-                      ease: "easeInOut",
-                    }}
-                    className="input-surface relative z-[1] w-full rounded-[22px] border border-white/10 bg-white/[0.04] py-3.5 pl-11 pr-4 text-sm  outline-none transition duration-300  focus:border-brand-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-brand-500/20"
-                />
-              </div>
-
-              {searchDropdownOpen && searchQuery.trim().length > 0 && (
-                  <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.96, filter: "blur(8px)" }}
-                      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                      className="glass-card absolute left-0 right-0 top-[calc(100%+10px)] z-[70] max-h-[32rem] overflow-y-auto rounded-2xl border border-brand-500/30 p-2 shadow-2xl shadow-brand-950/20"
-                  >
-                    {searchLoading && (
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="theme-muted px-3 py-3 text-xs"
-                        >
-                          {copy.searchLoading}
-                        </motion.p>
-                    )}
-
-                    {!searchLoading && searchResults.length === 0 && (
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="theme-muted px-3 py-3 text-xs"
-                        >
-                          {copy.searchEmpty}
-                        </motion.p>
-                    )}
-
-                    {!searchLoading &&
-                        searchResults.map((item, index) => (
-                            <motion.button
-                                key={item.id}
-                                type="button"
-                                onClick={() => openProduct(item.id)}
-                                initial={{ opacity: 0, y: 10, scale: 0.985 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{
-                                  delay: index * 0.04,
-                                  duration: 0.24,
-                                  ease: [0.22, 1, 0.36, 1],
-                                }}
-                                whileHover={{ x: 4, scale: 1.01 }}
-                                whileTap={{ scale: 0.985 }}
-                                className="tile-surface group/item flex w-full items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition hover:border-brand-400/40 hover:bg-white/[0.04]"
-                            >
-                  <span className="min-w-0">
-                    <span className="theme-heading block truncate text-sm transition group-hover/item:text-brand-100">
-                      {item.name}
-                    </span>
-                    <span className="theme-muted block truncate text-xs">
-                      {item.sku} · {item.brand || "OEM"}
-                    </span>
-                  </span>
-
-                              <motion.span
-                                  className="ml-3 flex-shrink-0 text-xs font-medium text-brand-200"
-                                  whileHover={{ scale: 1.06 }}
-                              >
-                                {formatConvertedPrice(item.price, displayCurrency, currencyRates, language)}
-                              </motion.span>
-                            </motion.button>
-                        ))}
-                  </motion.div>
-              )}
-            </motion.div>
-
-            <motion.button
-                whileHover={{ y: -2, scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                initial={{ opacity: 0, x: 14 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.18, duration: 0.45 }}
-                type="button"
-                onClick={applySearchFilter}
-                className="relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-3 text-sm font-medium text-white"
-            >
-              <motion.span
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                  initial={{ x: "-120%" }}
-                  whileHover={{ x: "120%" }}
-                  transition={{ duration: 0.7, ease: "easeInOut" }}
-              />
-              <span className="relative z-10">{copy.searchButton}</span>
-              <motion.div
-                  className="relative z-10"
-                  whileHover={{ x: 3 }}
-                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
-              >
-                <ArrowRight className="h-4 w-4" />
-              </motion.div>
-            </motion.button>
-          </div>
-        </motion.article>
+                    <h2 className="text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-5xl">RICHSTOK</h2>
+                    <p className="text-sm leading-relaxed text-zinc-100 sm:text-base">{copy.description}</p>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("catalog")?.scrollIntoView({behavior: "smooth", block: "start"})}
+                      className="mt-1 inline-flex w-fit items-center gap-2 rounded-lg border border-brand-300/60 bg-brand-600/40 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600/55"
+                    >
+                      {copy.heroCta}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </motion.div>
       </section>
 
+      <section id="catalog" className="relative z-20 scroll-mt-28">
+        <motion.article initial={{opacity: 0, y: 14}} animate={{opacity: 1, y: 0}} transition={{duration: 0.45}} className="glass-card rounded-2xl border border-brand-500/22 p-6 sm:p-8 lg:p-10">
+          <span className="inline-flex items-center rounded-md border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-[18px] uppercase tracking-[0.20em] text-brand-200">
+            {copy.badge}
+          </span>
+
+          <p className="theme-text mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">{copy.description}</p>
+
+          <motion.div
+            className="relative mt-6 grid gap-3 sm:grid-cols-[1fr,auto]"
+            initial={{opacity: 0, y: 8}}
+            animate={
+              searchSpotlight
+                ? {
+                    opacity: 1,
+                    y: 0,
+                    boxShadow: [
+                      "0 0 0 0 rgba(220, 38, 38, 0)",
+                      "0 0 0 10px rgba(220, 38, 38, 0.2)",
+                      "0 0 0 0 rgba(220, 38, 38, 0)"
+                    ]
+                  }
+                : {opacity: 1, y: 0, boxShadow: "0 0 0 0 rgba(220, 38, 38, 0)"}
+            }
+            transition={searchSpotlight ? {duration: 1.1, repeat: 1, ease: "easeInOut"} : {duration: 0.2}}
+          >
+            {searchSpotlight && (
+              <motion.span
+                className="pointer-events-none absolute inset-0 -z-10 rounded-2xl border border-brand-400/50"
+                initial={{opacity: 0}}
+                animate={{opacity: [0.15, 0.55, 0.15]}}
+                transition={{duration: 0.9, repeat: 2, ease: "easeInOut"}}
+              />
+            )}
+            <div ref={searchContainerRef} className="relative z-50 block">
+              <Search className="theme-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                autoComplete="off"
+                onFocus={() => {
+                  if (searchResults.length > 0 || searchLoading) {
+                    setSearchDropdownOpen(true);
+                  }
+                }}
+                placeholder={typedPlaceholder || copy.searchPlaceholder}
+                className={`input-surface w-full rounded-xl border py-3 pl-10 pr-3 text-sm outline-none transition focus:border-brand-400/60 ${
+                  searchSpotlight ? "border-brand-400/75 shadow-[0_0_0_2px_rgba(220,38,38,0.2)]" : ""
+                } relative z-10 placeholder:text-red-700/95 placeholder:opacity-100 dark:placeholder:text-red-300/95`}
+              />
+              {isSearchInputEmpty && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-10 right-3 top-1/2 z-[30] inline-flex -translate-y-1/2 items-center overflow-hidden text-sm font-medium text-[#991b1b] dark:text-[#fca5a5]"
+                >
+                  <span className="truncate">{typedPlaceholder || copy.searchPlaceholder}</span>
+                  <span className="ml-0.5 inline-block h-4 w-px flex-shrink-0 animate-pulse bg-[#dc2626] dark:bg-[#fca5a5]" />
+                </span>
+              )}
+
+              {searchDropdownOpen && searchQuery.trim().length > 0 && (
+                <div className="glass-card absolute left-0 right-0 top-[calc(100%+8px)] z-[70] max-h-[32rem] overflow-y-auto rounded-xl border border-brand-500/30 p-2">
+                  {searchLoading && <p className="theme-muted px-2 py-2 text-xs">{copy.searchLoading}</p>}
+                  {!searchLoading && searchResults.length === 0 && <p className="theme-muted px-2 py-2 text-xs">{copy.searchEmpty}</p>}
+                  {!searchLoading &&
+                    searchResults.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => openProduct(item.id)}
+                        className="tile-surface flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-2 text-left transition hover:border-brand-400/40"
+                      >
+                        <span className="min-w-0">
+                          <span className="theme-heading block truncate text-sm">{item.name}</span>
+                          <span className="theme-muted block truncate text-xs">
+                            {item.sku} · {item.brand || "OEM"}
+                          </span>
+                        </span>
+                        <span className="ml-3 flex-shrink-0 text-xs font-medium text-brand-200">
+                          {formatConvertedPrice(item.hasDiscount ? (item.discountedPrice ?? item.price) : item.price, displayCurrency, currencyRates, language)}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+            <motion.button
+              whileHover={{y: -1}}
+              whileTap={{scale: 0.98}}
+              type="button"
+              onClick={applySearchFilter}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-3 text-sm font-medium text-white"
+            >
+              {copy.searchButton}
+              <ArrowRight className="h-4 w-4" />
+            </motion.button>
+          </motion.div>
+        </motion.article>
+      </section>
 
       <section id="promo" className="relative z-10 scroll-mt-28">
         <motion.div
@@ -825,43 +769,79 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
           whileInView={{opacity: 1, y: 0}}
           viewport={{once: true, amount: 0.2}}
           transition={{duration: 0.4}}
-          className="glass-card rounded-2xl border border-brand-500/22 p-4 sm:p-6"
+          className="glass-card overflow-hidden rounded-2xl border border-brand-500/22 p-4 sm:p-6"
         >
           <p className="text-xs uppercase tracking-[0.18em] text-brand-300">{copy.promoTag}</p>
           <h3 className="theme-heading mt-1 text-xl font-semibold sm:text-2xl">{copy.promoTitle}</h3>
           <p className="theme-text mt-1 text-sm">{copy.promoSubtitle}</p>
 
-          <Swiper
-            modules={[Autoplay, Pagination]}
-            className="promo-swiper mt-4"
-            slidesPerView={1}
-            spaceBetween={12}
-            loop={copy.promoSlides.length > 1}
-            autoplay={{delay: 4200, disableOnInteraction: false, pauseOnMouseEnter: true}}
-            pagination={{clickable: true}}
-          >
-            {copy.promoSlides.map((slide, index) => (
-              <SwiperSlide key={`${slide.title}-${index}`}>
-                <motion.article
-                  whileHover={{y: -2}}
-                  className="relative overflow-hidden rounded-xl border border-brand-500/35 bg-gradient-to-br from-brand-600/20 via-brand-500/10 to-black/10 p-5 sm:p-7"
-                >
-                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-brand-500/25 blur-2xl" />
-                  <div className="pointer-events-none absolute -bottom-14 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-brand-300/20 blur-2xl" />
-                  <p className="theme-heading text-lg font-semibold sm:text-2xl">{slide.title}</p>
-                  <p className="theme-text mt-2 max-w-2xl text-sm sm:text-base">{slide.description}</p>
-                  <button
-                    type="button"
-                    onClick={() => document.getElementById("categories")?.scrollIntoView({behavior: "smooth", block: "start"})}
-                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-brand-400/45 bg-brand-500/15 px-3 py-2 text-sm font-medium text-brand-100 transition hover:border-brand-300 hover:bg-brand-500/25"
-                  >
-                    {slide.action}
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </motion.article>
-              </SwiperSlide>
-            ))}
-          </Swiper>
+          {promoProducts.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-brand-500/25 bg-brand-500/8 px-4 py-3 text-sm theme-text">
+              {copy.promoEmpty}
+            </div>
+          ) : (
+            <Swiper
+              modules={[Autoplay, FreeMode]}
+              className="promo-swiper mt-4"
+              slidesPerView={1.02}
+              spaceBetween={12}
+              loop={promoProducts.length > 1}
+              speed={7000}
+              freeMode={{enabled: true, momentum: false}}
+              autoplay={{delay: 0, disableOnInteraction: false, pauseOnMouseEnter: true}}
+              breakpoints={{
+                768: {slidesPerView: 2, spaceBetween: 14},
+                1024: {slidesPerView: 2.4, spaceBetween: 16},
+                1280: {slidesPerView: 3, spaceBetween: 18}
+              }}
+            >
+              {promoProducts.map((item) => {
+                const hasDiscount = Boolean(item.hasDiscount) || (item.discountPercent ?? 0) > 0;
+                const discountPercent = Math.max(0, Math.min(100, item.discountPercent ?? 0));
+                const effectivePrice = hasDiscount ? (item.discountedPrice ?? item.price) : item.price;
+                return (
+                  <SwiperSlide key={`promo-product-${item.id}`}>
+                    <motion.article whileHover={{y: -2}} className="tile-surface flex h-full flex-col overflow-hidden rounded-xl border border-brand-500/30">
+                      <div className="relative h-44 overflow-hidden border-b border-brand-500/20 bg-black/25">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-brand-200/75">RICHSTOK</div>
+                        )}
+                        {hasDiscount && (
+                          <span className="absolute left-3 top-3 rounded-md border border-rose-400/40 bg-rose-500/25 px-2 py-1 text-[11px] font-semibold text-white">
+                            -{discountPercent}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col p-4">
+                        <p className="theme-heading line-clamp-2 text-sm font-semibold">{item.name}</p>
+                        <p className="theme-muted mt-1 text-xs">Brand code: {item.sku}</p>
+                        <div className="mt-3 flex items-end gap-2">
+                          {hasDiscount && (
+                            <span className="theme-muted text-xs line-through">
+                              {formatConvertedPrice(item.price, displayCurrency, currencyRates, language)}
+                            </span>
+                          )}
+                          <span className="text-lg font-semibold text-brand-200">
+                            {formatConvertedPrice(effectivePrice, displayCurrency, currencyRates, language)}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openProduct(item.id)}
+                          className="mt-4 inline-flex items-center gap-2 rounded-lg border border-brand-400/45 bg-brand-500/15 px-3 py-2 text-sm font-medium text-brand-100 transition hover:border-brand-300 hover:bg-brand-500/25"
+                        >
+                          {copy.promoOpenProduct}
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </motion.article>
+                  </SwiperSlide>
+                );
+              })}
+            </Swiper>
+          )}
         </motion.div>
       </section>
 
@@ -1028,31 +1008,27 @@ export default function StorePage({language, displayCurrency, currencyRates, onA
 
         {!hasError && totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-center gap-2">
-
             <button
-                type="button"
-                onClick={() => changePage(currentPage - 1)}
-                disabled={currentPage === 0}
-                className="group inline-flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-100 transition-all duration-200 hover:bg-brand-500/20 hover:border-brand-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              type="button"
+              onClick={() => changePage(currentPage - 1)}
+              disabled={currentPage === 0}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
             >
-              <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+              <ChevronLeft className="h-3.5 w-3.5" />
               {copy.pagination.prev}
             </button>
-
-            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <span className="theme-text rounded-lg border border-white/10 px-3 py-1.5 text-xs">
               {copy.pagination.page} {currentPage + 1} {copy.pagination.of} {totalPages}
-            </div>
-
+            </span>
             <button
-                type="button"
-                onClick={() => changePage(currentPage + 1)}
-                disabled={currentPage + 1 >= totalPages}
-                className="group inline-flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-100 transition-all duration-200 hover:bg-brand-500/20 hover:border-brand-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              type="button"
+              onClick={() => changePage(currentPage + 1)}
+              disabled={currentPage + 1 >= totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs theme-text transition hover:border-brand-300 disabled:opacity-45"
             >
               {copy.pagination.next}
-              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
-
           </div>
         )}
       </section>
