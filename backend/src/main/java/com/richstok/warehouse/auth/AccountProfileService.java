@@ -24,14 +24,23 @@ public class AccountProfileService {
 
     @Transactional
     public AccountProfileResponse updateProfile(AppUser user, AccountProfileRequest request) {
-        user.setFullName(request.fullName().trim());
+
         user.setAvatarUrl(normalizeAvatar(request.avatarUrl()));
         AppUser savedUser = appUserRepository.save(user);
 
-        UserInfo userInfo = userInfoRepository.findByUserId(user.getId())
+
+        return toResponse(savedUser, new UserInfo());
+    }
+
+    @Transactional
+    public AccountProfileResponse updateProfile(long userID, AppUser user, AccountProfileRequest request) {
+
+        UserInfo savedUserInfo;
+//        user.setFullName(request.fullName().trim());
+        UserInfo userInfo = userInfoRepository.findByUserId(userID)
                 .orElseGet(() -> {
                     UserInfo created = new UserInfo();
-                    created.setUserId(user.getId());
+                    created.setUserId(userID);
                     return created;
                 });
         userInfo.setPhone(normalizeNullable(request.phone()));
@@ -42,8 +51,9 @@ public class AccountProfileService {
         userInfo.setPostalCode(normalizeNullable(request.postalCode()));
         userInfo.setCountry(normalizeNullable(request.country()));
 
-        UserInfo savedUserInfo = userInfoRepository.save(userInfo);
-        return toResponse(savedUser, savedUserInfo);
+        savedUserInfo = userInfoRepository.save(userInfo);
+
+        return toResponse(new AppUser(), savedUserInfo);
     }
 
     private AccountProfileResponse toResponse(AppUser user, UserInfo userInfo) {

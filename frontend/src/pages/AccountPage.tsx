@@ -372,12 +372,6 @@ const copy: Record<
   }
 };
 
-const tabs: Array<{id: AccountTab; icon: typeof ListOrdered}> = [
-  {id: "orders", icon: ListOrdered},
-  {id: "profile", icon: UserRound},
-  {id: "password", icon: LockKeyhole}
-];
-
 export default function AccountPage({language, user}: AccountPageProps) {
   const location = useLocation();
   const ui = copy[language];
@@ -390,7 +384,6 @@ export default function AccountPage({language, user}: AccountPageProps) {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-  const [profileAvatarUploading, setProfileAvatarUploading] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -558,48 +551,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
     }
   }
 
-  async function handleAvatarUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      setProfileError(ui.profile.avatarUploadError);
-      setProfileSuccess(null);
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setProfileError(ui.profile.avatarUploadError);
-      setProfileSuccess(null);
-      return;
-    }
 
-    try {
-      setProfileAvatarUploading(true);
-      setProfileError(null);
-      setProfileSuccess(null);
-      const avatarUrl = await fileToDataUrl(file);
-      const updated = await updateAccountProfile({...profile, avatarUrl});
-      setProfile({
-        fullName: updated.fullName ?? "",
-        avatarUrl: updated.avatarUrl ?? "",
-        phone: updated.phone ?? "",
-        phoneAlt: updated.phoneAlt ?? "",
-        addressLine1: updated.addressLine1 ?? "",
-        addressLine2: updated.addressLine2 ?? "",
-        city: updated.city ?? "",
-        postalCode: updated.postalCode ?? "",
-        country: updated.country ?? ""
-      });
-      setCurrentDebt(normalizeMoney(updated.currentDebt));
-      setProfileSuccess(ui.profile.success);
-    } catch (error) {
-      setProfileError(getApiErrorMessage(error) ?? ui.profile.avatarUploadError);
-    } finally {
-      setProfileAvatarUploading(false);
-    }
-  }
 
   async function handleChangePassword(event: FormEvent) {
     event.preventDefault();
@@ -657,32 +609,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
           </div>
         </header>
 
-        <section className="glass-card rounded-2xl p-3">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                  <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                          isActive
-                              ? "bg-gradient-to-r from-brand-600 to-pulse-500 text-white"
-                              : "theme-text border border-white/12 hover:border-brand-400/40"
-                      }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {ui.tabs[tab.id]}
-                  </button>
-              );
-            })}
-          </div>
-        </section>
-
         <AnimatePresence mode="wait">
-          {activeTab === "orders" && (
               <motion.section
                   key="tab-orders"
                   initial={{opacity: 0, y: 8}}
@@ -780,128 +707,7 @@ export default function AccountPage({language, user}: AccountPageProps) {
                   </button>
                 </div>
               </motion.section>
-          )}
-
-          {activeTab === "profile" && (
-              <motion.section
-                  key="tab-profile"
-                  initial={{opacity: 0, y: 8}}
-                  animate={{opacity: 1, y: 0}}
-                  exit={{opacity: 0, y: -8}}
-                  className="glass-card rounded-2xl p-5 sm:p-6"
-              >
-                <h2 className="theme-heading text-lg font-semibold">{ui.profile.title}</h2>
-                <p className="theme-text mt-1 text-sm">{ui.profile.subtitle}</p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-500/20 bg-brand-500/8 px-4 py-3">
-                  <div className="relative h-16 w-16 overflow-hidden rounded-full border border-brand-500/35 bg-black/25">
-                    {profile.avatarUrl ? (
-                        <img src={profile.avatarUrl} alt={profile.fullName || "User avatar"} className="h-full w-full object-cover" />
-                    ) : (
-                        <div className="flex h-full w-full items-center justify-center text-brand-200">
-                          <Camera className="h-6 w-6" />
-                        </div>
-                    )}
-                  </div>
-                  <div className="min-w-[220px] flex-1">
-                    <p className="theme-text text-sm">{ui.profile.avatarHint}</p>
-                    <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
-                      <input type="file" accept="image/*" onChange={(event) => void handleAvatarUpload(event)} className="sr-only" />
-                      <Camera className="h-3.5 w-3.5" />
-                      {profileAvatarUploading ? ui.profile.avatarUploading : ui.profile.avatarPick}
-                    </label>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {editableProfileFields.map((field) => (
-                      <label key={field} className={`block text-sm ${field === "addressLine1" || field === "addressLine2" ? "sm:col-span-2" : ""}`}>
-                        <span className="theme-text mb-1 block">{ui.profile.fields[field]}</span>
-                        <input
-                            required={["fullName", "phone", "addressLine1", "city", "country"].includes(field)}
-                            type="text"
-                            value={profile[field]}
-                            onChange={(event) => setProfile((prev) => ({...prev, [field]: event.target.value}))}
-                            className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                        />
-                      </label>
-                  ))}
-
-                  <button
-                      type="submit"
-                      disabled={profileSaving || profileLoading}
-                      className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
-                  >
-                    {profileSaving ? ui.profile.saving : ui.profile.save}
-                  </button>
-                </form>
-
-                {profileError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{profileError}</p>}
-                {profileSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{profileSuccess}</p>}
-              </motion.section>
-          )}
-
-          {activeTab === "password" && (
-              <motion.section
-                  key="tab-password"
-                  initial={{opacity: 0, y: 8}}
-                  animate={{opacity: 1, y: 0}}
-                  exit={{opacity: 0, y: -8}}
-                  className="glass-card rounded-2xl p-5 sm:p-6"
-              >
-                <h2 className="theme-heading text-lg font-semibold">{ui.password.title}</h2>
-                <p className="theme-text mt-1 text-sm">{ui.password.subtitle}</p>
-
-                <form onSubmit={handleChangePassword} className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm sm:col-span-2">
-                    <span className="theme-text mb-1 block">{ui.password.currentPassword}</span>
-                    <input
-                        required
-                        minLength={8}
-                        type="password"
-                        value={currentPassword}
-                        onChange={(event) => setCurrentPassword(event.target.value)}
-                        className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                    />
-                  </label>
-
-                  <label className="block text-sm">
-                    <span className="theme-text mb-1 block">{ui.password.newPassword}</span>
-                    <input
-                        required
-                        minLength={8}
-                        type="password"
-                        value={newPassword}
-                        onChange={(event) => setNewPassword(event.target.value)}
-                        className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                    />
-                  </label>
-
-                  <label className="block text-sm">
-                    <span className="theme-text mb-1 block">{ui.password.repeatPassword}</span>
-                    <input
-                        required
-                        minLength={8}
-                        type="password"
-                        value={repeatPassword}
-                        onChange={(event) => setRepeatPassword(event.target.value)}
-                        className="input-surface w-full rounded-xl border px-3 py-2 outline-none transition focus:border-brand-300"
-                    />
-                  </label>
-
-                  <button
-                      type="submit"
-                      disabled={passwordLoading}
-                      className="rounded-xl bg-gradient-to-r from-brand-500 to-pulse-500 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70 sm:col-span-2 sm:justify-self-end"
-                  >
-                    {passwordLoading ? ui.password.submitting : ui.password.submit}
-                  </button>
-                </form>
-
-                {passwordError && <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{passwordError}</p>}
-                {passwordSuccess && <p className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{passwordSuccess}</p>}
-              </motion.section>
-          )}
+          )
         </AnimatePresence>
       </motion.section>
   );
@@ -1090,21 +896,7 @@ function getApiErrorMessage(error: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read avatar file."));
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === "string" && result.length > 0) {
-        resolve(result);
-        return;
-      }
-      reject(new Error("Invalid avatar file."));
-    };
-    reader.readAsDataURL(file);
-  });
-}
+
 
 function getInitials(fullName: string): string {
   const normalized = fullName.trim();

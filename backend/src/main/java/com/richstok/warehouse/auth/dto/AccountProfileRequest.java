@@ -1,10 +1,9 @@
 package com.richstok.warehouse.auth.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record AccountProfileRequest(
-        @NotBlank @Size(max = 120) String fullName,
+        @Size(max = 120) String fullName,
         @Size(max = 2000000) String avatarUrl,
         @Size(max = 40) String phone,
         @Size(max = 40) String phoneAlt,

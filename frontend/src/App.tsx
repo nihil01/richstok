@@ -1,4 +1,11 @@
-import {changePassword, fetchAccountProfile, fetchCurrencyRate, fetchCurrentUser, logout} from "@/api/client";
+import {
+  changePassword,
+  fetchAccountProfile,
+  fetchCurrencyRate,
+  fetchCurrentUser,
+  logout,
+  updateAccountProfile
+} from "@/api/client";
 import SiteFooter from "@/components/SiteFooter";
 import StartupLoader from "@/components/StartupLoader";
 import RichstokLogo from "@/components/logo/RichstokLogo";
@@ -10,17 +17,40 @@ import LoginPage from "@/pages/LoginPage";
 import ProductDetailsPage from "@/pages/ProductDetailsPage";
 import PublicGatewayPage from "@/pages/PublicGatewayPage";
 import StorePage from "@/pages/StorePage";
-import type {AccountProfile, AuthUser} from "@/types/auth";
+import type {AccountProfile, AccountProfilePayload, AuthUser} from "@/types/auth";
 import type {DisplayCurrency} from "@/types/currency";
 import type {Product} from "@/types/product";
 import type {Language, ThemeMode} from "@/types/ui";
 import {DEFAULT_DISPLAY_RATES, DISPLAY_CURRENCIES, getCurrencySymbol, resolveDisplayCurrency} from "@/utils/currency";
 import {AnimatePresence, motion} from "framer-motion";
-import {CheckCircle2, Coins, Eye, EyeOff, Home, LayoutDashboard, LogIn, LogOut, MapPin, Moon, Phone, ReceiptText, RotateCcw, Search, Settings2, ShoppingCart, Sparkles, Sun, UserRound, X} from "lucide-react";
-import type {FormEvent, ReactNode} from "react";
+import {
+  Camera,
+  CheckCircle2,
+  Coins,
+  Eye,
+  EyeOff,
+  Home,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  MapPin,
+  Moon,
+  Phone,
+  ReceiptText,
+  RotateCcw,
+  Search,
+  Settings2,
+  ShoppingCart,
+  Sparkles,
+  Sun,
+  UserRound,
+  X
+} from "lucide-react";
+import type {ChangeEvent, FormEvent, ReactNode} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import type {Location} from "react-router-dom";
 import {Link, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom";
+
 
 const labels: Record<
     Language,
@@ -34,7 +64,6 @@ const labels: Record<
       accountBalance: string;
       orders: string;
       returns: string;
-      profile: string;
       profileDetails: string;
       address: string;
       phone: string;
@@ -65,6 +94,29 @@ const labels: Record<
       authOnlyBody: string;
       toStore: string;
       addedToCart: string;
+      profile: {
+        title: string;
+        subtitle: string;
+        save: string;
+        saving: string;
+        success: string;
+        loadError: string;
+        saveError: string;
+        avatarHint: string;
+        avatarPick: string;
+        avatarUploading: string;
+        avatarUploadError: string;
+        fields: {
+          fullName: string;
+          phone: string;
+          phoneAlt: string;
+          addressLine1: string;
+          addressLine2: string;
+          city: string;
+          postalCode: string;
+          country: string;
+        };
+      };
     }
 > = {
   az: {
@@ -77,7 +129,6 @@ const labels: Record<
     accountBalance: "Cari hesab",
     orders: "Sifarişlər",
     returns: "Qaytarma",
-    profile: "Profil",
     profileDetails: "Profil məlumatları",
     address: "Ünvan",
     phone: "Telefon",
@@ -107,7 +158,30 @@ const labels: Record<
     authOnlyTitle: "Giriş tələb olunur",
     authOnlyBody: "Bu bölməni açmaq üçün hesabına daxil ol.",
     toStore: "Mağazaya qayıt",
-    addedToCart: "Məhsul səbətə əlavə olundu"
+    addedToCart: "Məhsul səbətə əlavə olundu",
+    profile: {
+      title: "Ünvan və əlaqə məlumatları",
+      subtitle: "Checkout zamanı məhz bu məlumatlardan istifadə olunur.",
+      save: "Məlumatları yenilə",
+      saving: "Yenilənir...",
+      success: "Məlumatlar yeniləndi.",
+      loadError: "Profil məlumatlarını yükləmək mümkün olmadı.",
+      saveError: "Məlumatlar yenilənmədi.",
+      avatarHint: "Profil şəkli yüklə (max 2MB).",
+      avatarPick: "Avatar seç",
+      avatarUploading: "Yüklənir...",
+      avatarUploadError: "Avatar yüklənmədi.",
+      fields: {
+        fullName: "Ad Soyad",
+        phone: "Telefon",
+        phoneAlt: "Əlavə telefon",
+        addressLine1: "Ünvan",
+        addressLine2: "Əlavə ünvan",
+        city: "Şəhər",
+        postalCode: "Poçt kodu",
+        country: "Ölkə"
+      }
+    },
   },
   en: {
     store: "Store",
@@ -119,7 +193,6 @@ const labels: Record<
     accountBalance: "Account",
     orders: "Orders",
     returns: "Returns",
-    profile: "Profile",
     profileDetails: "Profile details",
     address: "Address",
     phone: "Phone",
@@ -149,7 +222,30 @@ const labels: Record<
     authOnlyTitle: "Authentication required",
     authOnlyBody: "Please sign in to open this section.",
     toStore: "Back to store",
-    addedToCart: "Product added to cart"
+    addedToCart: "Product added to cart",
+    profile: {
+      title: "Address and contact details",
+      subtitle: "Checkout uses this profile data.",
+      save: "Update details",
+      saving: "Updating...",
+      success: "Profile details updated.",
+      loadError: "Failed to load profile details.",
+      saveError: "Failed to update profile details.",
+      avatarHint: "Upload profile image (max 2MB).",
+      avatarPick: "Choose avatar",
+      avatarUploading: "Uploading...",
+      avatarUploadError: "Failed to upload avatar.",
+      fields: {
+        fullName: "Full name",
+        phone: "Phone",
+        phoneAlt: "Alternative phone",
+        addressLine1: "Address",
+        addressLine2: "Address line 2",
+        city: "City",
+        postalCode: "Postal code",
+        country: "Country"
+      }
+    },
   },
   ru: {
     store: "Магазин",
@@ -161,7 +257,6 @@ const labels: Record<
     accountBalance: "Текущий счет",
     orders: "Заказы",
     returns: "Возврат",
-    profile: "Профиль",
     profileDetails: "Данные профиля",
     address: "Адрес",
     phone: "Телефон",
@@ -191,9 +286,33 @@ const labels: Record<
     authOnlyTitle: "Нужен вход в аккаунт",
     authOnlyBody: "Войди в аккаунт, чтобы открыть этот раздел.",
     toStore: "Вернуться в магазин",
-    addedToCart: "Товар добавлен в корзину"
+    addedToCart: "Товар добавлен в корзину",
+    profile: {
+      title: "Адрес и контакты",
+      subtitle: "Эти данные используются при оформлении.",
+      save: "Обновить данные",
+      saving: "Обновление...",
+      success: "Данные профиля обновлены.",
+      loadError: "Не удалось загрузить данные профиля.",
+      saveError: "Не удалось обновить данные профиля.",
+      avatarHint: "Загрузи аватар (до 2MB).",
+      avatarPick: "Выбрать аватар",
+      avatarUploading: "Загрузка...",
+      avatarUploadError: "Не удалось загрузить аватар.",
+      fields: {
+        fullName: "Имя и фамилия",
+        phone: "Телефон",
+        phoneAlt: "Доп. телефон",
+        addressLine1: "Адрес",
+        addressLine2: "Доп. адрес",
+        city: "Город",
+        postalCode: "Почтовый индекс",
+        country: "Страна"
+      }
+    },
   }
 };
+
 
 function getInitialTheme(): ThemeMode {
   const savedTheme = localStorage.getItem("richstok-theme") as ThemeMode | null;
@@ -306,8 +425,30 @@ export default function App() {
   const accountSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const accountTabParam = accountSearchParams.get("tab");
   const accountModeParam = accountSearchParams.get("mode");
-  const ui = labels[language];
   const isAdmin = authUser?.role === "ADMIN";
+  const [currentDebt, setCurrentDebt] = useState(0);
+  const ui = labels[language];
+
+  const emptyProfile: AccountProfilePayload = {
+    fullName: "",
+    avatarUrl: "",
+    phone: "",
+    phoneAlt: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    postalCode: "",
+    country: ""
+  };
+
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileAvatarUploading, setProfileAvatarUploading] = useState(false);
+  const [profile, setProfile] = useState<AccountProfilePayload>(emptyProfile);
+
+
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -498,6 +639,73 @@ export default function App() {
     } finally {
       setPasswordSaving(false);
     }
+  }
+
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Failed to read avatar file."));
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === "string" && result.length > 0) {
+          resolve(result);
+          return;
+        }
+        reject(new Error("Invalid avatar file."));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleAvatarUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setProfileError(ui.profile.avatarUploadError);
+      setProfileSuccess(null);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileError(ui.profile.avatarUploadError);
+      setProfileSuccess(null);
+      return;
+    }
+
+    try {
+      setProfileAvatarUploading(true);
+      setProfileError(null);
+      setProfileSuccess(null);
+      const avatarUrl = await fileToDataUrl(file);
+      const updated = await updateAccountProfile({...profile, avatarUrl});
+      setProfile({
+        fullName: updated.fullName ?? "",
+        avatarUrl: updated.avatarUrl ?? "",
+        phone: updated.phone ?? "",
+        phoneAlt: updated.phoneAlt ?? "",
+        addressLine1: updated.addressLine1 ?? "",
+        addressLine2: updated.addressLine2 ?? "",
+        city: updated.city ?? "",
+        postalCode: updated.postalCode ?? "",
+        country: updated.country ?? ""
+      });
+      setCurrentDebt(normalizeMoney(updated.currentDebt));
+      setProfileSuccess(ui.profile.success);
+    } catch (error) {
+      setProfileError(getApiErrorMessage(error) ?? ui.profile.avatarUploadError);
+    } finally {
+      setProfileAvatarUploading(false);
+    }
+  }
+
+  function normalizeMoney(value: unknown) {
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+    return Math.max(0, parsed);
   }
 
   function goStoreSection(sectionId: "catalog" | "categories" | "brands") {
@@ -761,6 +969,26 @@ export default function App() {
                       >
                         <X className="h-4 w-4" />
                       </button>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-brand-500/20 bg-brand-500/8 px-4 py-3">
+                      <div className="relative h-16 w-16 overflow-hidden rounded-full border border-brand-500/35 bg-black/25">
+                        {profile.avatarUrl ? (
+                            <img src={profile.avatarUrl} alt={profile.fullName || "User avatar"} className="h-full w-full object-cover" />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center text-brand-200">
+                              <Camera className="h-6 w-6" />
+                            </div>
+                        )}
+                      </div>
+                      <div className="min-w-[220px] flex-1">
+                        <p className="theme-text text-sm">{ui.profile.avatarHint}</p>
+                        <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/35 bg-brand-500/10 px-3 py-1.5 text-xs text-brand-100 transition hover:bg-brand-500/20">
+                          <input type="file" accept="image/*" onChange={(event) => void handleAvatarUpload(event)} className="sr-only" />
+                          <Camera className="h-3.5 w-3.5" />
+                          {profileAvatarUploading ? ui.profile.avatarUploading : ui.profile.avatarPick}
+                        </label>
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-2 rounded-xl border border-white/12 bg-black/15 p-3">

@@ -194,7 +194,12 @@ export async function fetchAccountProfile() {
 }
 
 export async function updateAccountProfile(payload: AccountProfilePayload) {
-  const {data} = await api.put<AccountProfile>("/account/profile", payload);
+  const {data} = await api.put<AccountProfile>("/account/user_profile", payload);
+  return data;
+}
+
+export async function updateAdminAccountProfile(userId: number, payload: AccountProfilePayload) {
+  const {data} = await api.put<AccountProfile>(`/account/admin_profile/${userId}`, payload);
   return data;
 }
 
